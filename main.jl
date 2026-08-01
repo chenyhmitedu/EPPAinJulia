@@ -2,8 +2,9 @@ cd(@__DIR__)    # Set the working directory at where this file is located
 using Pkg
 
 Pkg.activate(".")
-Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
-Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
+
+#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
+#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
 
 #=
 Pkg.add([
@@ -13,6 +14,10 @@ Pkg.add([
 "JuMP",
 "MPSGE"
 ])
+
+Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
+Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
+
 =#
 
 Pkg.instantiate()

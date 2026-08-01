@@ -1,7 +1,7 @@
 name = "EPPAinJulia"
-uuid = "6ea7483c-3405-4004-a010-52d2909813f4"
+uuid = "7dd68fc8-cda7-4d12-93b1-ed626a3eb8ab"
 version = "0.1.0"
-authors = ["Y.-H. Henry Chen <chenyh@mit.edu>"]
+authors = ["Henry Chen <chenyh@mit.edu>"]
 
 [deps]
 CSV = "336ed68f-0bac-5ca0-87d4-7b16caf5d00b"
@@ -13,12 +13,14 @@ JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MPSGE = "d5dc2f44-7ae2-49e9-bc77-b47b6bca565d"
 
 [sources]
-CSVtoDIC = {path = "D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC"}
-GTAPdata = {path = "D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata"}
+CSVtoDIC = {rev = "master", url = "https://github.com/chenyhmitedu/CSVtoDIC"}
+GTAPdata = {rev = "master", url = "https://github.com/chenyhmitedu/GTAPdata"}
 
 [compat]
 CSV = "0.10.16"
+CSVtoDIC = "0.1.0"
 DataFrames = "1.8.2"
+GTAPdata = "0.1.0"
 JLD2 = "0.6.5"
 JuMP = "1.31.1"
 MPSGE = "0.7.1"
