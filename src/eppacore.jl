@@ -16,7 +16,7 @@ function EPPACore(MGE, data, setting)
         X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Subsidy and transport service included exports")
         A[i=data["set_i"], g=data["set_g"], r=data["set_r"]],      (description = "Armington good")
         Z[r=data["set_r"]],                                        (description = "Aggregate private consumption")
-        GOVT[r=data["set_r"]],                                     (description = "Aggregate government consumption")
+        GOV[r=data["set_r"]],                                      (description = "Aggregate government consumption")
         INV[r=data["set_r"]],                                      (description = "Investment")
 
     end)
@@ -76,7 +76,7 @@ function EPPACore(MGE, data, setting)
     end
 
     for g ∈ data["set_gov"], r ∈ data["set_r"]
-        @production(MGE, GOVT[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+        @production(MGE, GOV[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
             @output(PG[r],                      data["g0"][r], t,       taxes = [Tax(RA[r], td[r, g])])
             @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r], sf)
             @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r], sef)
