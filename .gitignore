@@ -1,0 +1,7 @@
+# Julia
+Manifest.toml
+
+# Model data
+/src/*.jld2
+/src/data/
+
