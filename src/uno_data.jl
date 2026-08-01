@@ -13,6 +13,9 @@ data["set_con"]       = [:c]
 data["set_gov"]     = [:g]
 data["set_inv"]     = [:i]
 
+data["set_fix"]     = [:fix]
+data["set_lnd"]     = setdiff(data["set_sf"], data["set_fix"])
+
 # EPPA parameters notation
 
 # xdp0(r,i,j)	= vdfm(i,j,r);
