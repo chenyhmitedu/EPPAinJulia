@@ -3,5 +3,5 @@ Manifest.toml
 
 # Model data
 /src/*.jld2
-/src/data/
+/src/data/*.csv
 
