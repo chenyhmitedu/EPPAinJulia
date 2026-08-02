@@ -56,42 +56,43 @@ function EPPACore(MGE, data, setting)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
-    @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sve => sn = data["esubve"][g], sva => sve = data["esubva"][g], sef => sve = data["esubef"][g], sf => sef = data["esubf"][g]], begin
-#    @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t = 0, s = data["esub"][g], begin
-        @output(PD[g, r],                       data["xp0"][r, g], t,           taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
-        @input(PE[i=data["set_fe"], g, r],      data["xa0"][r, i, g],   sf,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],   sef,    taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],   sn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+#    @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sve => sn = data["esubve"][g], sva => sve = data["esubva"][g], sef => sve = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+    @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t = 0, s = data["esub"][g]], begin
+        @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
+        @input(PE[i=data["set_fe"], g, r],      data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
         @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],  s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
         @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],  s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
-        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  sva,    taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
+        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  s,      taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
     end)
 
     for g ∈ data["set_con"], r ∈ data["set_r"]
-        @production(MGE, Z[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+#        @production(MGE, Z[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+        @production(MGE, Z[r], [t = 0, s = data["esub"][g]], begin
             @output(PU[r],                      data["cons0"][r],       t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   sf ,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   sef,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   sn ,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
     for g ∈ data["set_gov"], r ∈ data["set_r"]
-        @production(MGE, GOV[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+#        @production(MGE, GOV[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+        @production(MGE, GOV[r], [t = 0, s = data["esub"][g]], begin
             @output(PG[r],                      data["g0"][r],          t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   sf ,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   sef,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   sn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
     for g ∈ data["set_inv"], r ∈ data["set_r"]
-        @production(MGE, INV[r], [t = 0, s = data["esub"][g], sn => s = data["esubn"][g], sef => sn = data["esubef"][g], sf => sef = data["esubf"][g]], begin
+        @production(MGE, INV[r], [t = 0, s = data["esub"][g]], begin
             @output(PI[r],                      data["inv0"][r],        t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   sf,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   sef,    taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   
-            taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r], sn)
+            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
@@ -102,12 +103,12 @@ function EPPACore(MGE, data, setting)
 
     @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = data["esubm"][i]], begin
         @output(PM[i, r],                       data["vim"][i, r],      t)
-        @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],    s, taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
+        @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],    s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
     end)
 
     @production(MGE, X[i=data["set_i"], s=data["set_r"], r=data["set_r"]], [t = 0, s = 0], begin
         @output(PX[i, s, r], data["x0"][r, s, i], t)
-        @input(PD[i, s],                        data["wtflow0"][r, s, i], s,   taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
+        @input(PD[i, s],                        data["wtflow0"][r, s, i], s,    taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
         @input(PT[j=data["set_i"]],             data["vtwr"][j, i, s, r], s)
     end)
 
