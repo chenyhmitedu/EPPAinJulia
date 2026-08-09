@@ -7,6 +7,7 @@ module EPPAinJulia
 
     include("load_data.jl")
     export Load_gtap_data
+    export Load_satellite_data
 
     include("uno_data.jl")
     export Uno_data

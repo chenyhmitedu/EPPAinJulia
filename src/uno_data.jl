@@ -1,12 +1,15 @@
 function Uno_data(data::Dict)
 
-# Model specific sets
+#       Model specific sets
 
 # Vectors below may be changed depending on the sectoral names and resolution
 data["set_fe"]      = [:coa, :gas, :p_c, :oil]
 data["set_elec"]    = [:elec]
 data["set_e"]       = union(data["set_fe"], data["set_elec"])
 data["set_ne"]      = setdiff(data["set_i"], data["set_e"])
+data["set_roil"]    = [:p_c]
+data["set_othr"]    = [:othr]
+data["set_serv"]    = [:serv]
 
 data["set_tr"]      = [:tran]
 data["set_con"]       = [:c]
@@ -16,7 +19,7 @@ data["set_inv"]     = [:i]
 data["set_fix"]     = [:fix]
 data["set_lnd"]     = setdiff(data["set_sf"], data["set_fix"])
 
-# EPPA parameters notation
+#       EPPA parameters notation
 
 # xdp0(r,i,j)	= vdfm(i,j,r);
 data["xd0"] = Dict(
@@ -67,8 +70,8 @@ data["xp0"] = Dict(
 
 # cons0(r)	= sum(i, vdfm(i,"c",r)*(1+rtfd(i,"c",r)) + vifm(i,"c",r)*(1+rtfi(i,"c",r)));
 data["cons0"] = Dict(
-    r => data["vom"][:c, r]
-    for r ∈ data["set_r"]
+    r => data["vom"][g, r]
+    for r ∈ data["set_r"], g ∈ data["set_con"]
 )
 
 # Value of tax-excluded government expenditure (td tax excluded)
@@ -81,6 +84,51 @@ data["g0"] = Dict(
 data["inv0"] = Dict(
     r => data["vom"][:i, r]
     for r ∈ data["set_r"]
+)
+
+#       Household transportation
+
+# owntrn(r)        = es(r)*cons0(r); es(r) = own-supply expenditure share
+data["owntrn"] = Dict(
+    r => data["es"][r]*data["cons0"][r]
+    for r ∈ data["set_r"]
+)
+
+# tfo(r)           = os(r)*ence("roil",r); ence("roil",r) = data["xa0"][r, :p_c, :c]
+data["tfo"] = Dict(
+    r => data["os"][r]*data["xa0"][r, i, g]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+)
+
+# pbio(r) = ence0("roil",r)/efd("roil",r);	  
+data["pbio"] = Dict(
+    r => data["xa0"][r, i, g]/data["eind"][i, g, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+)
+
+# ebio(r) = pbio(r)*bio_baseyear(r,"bio-fg");
+data["ebio"] = Dict(
+    r => data["pbio"][r]*data["bio_baseyear"][r]
+    for r ∈ data["set_r"]
+)
+
+# tbo(r)           = ebio(r)/pc0("roil",r);
+data["tbo"] = Dict(
+    r => data["ebio"][r]/(1+data["ta0"][i, g, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+)
+
+# tse(r)$(not bra(r))     = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("food",r))/pc0("serv",r);
+data["tse"] = Dict(
+    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+)
+
+# own(r)                  = (pc0("roil",r)*tfo(r)+pc0("roil",r)*tbo(r)+pc0("othr",r)*toi(r)+pc0("serv",r)*tse(r));
+data["own"] = Dict(
+    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]+data["tbo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
+    for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
 )
 
 return data

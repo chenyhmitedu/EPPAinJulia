@@ -11,6 +11,8 @@ GTAPdata = "130c15d4-ad42-4bd4-91d3-6787eb393e58"
 JLD2 = "033835bb-8acc-5ee8-8aae-3f567f8a3819"
 JuMP = "4076af6c-e467-56ae-b986-b466b2749572"
 MPSGE = "d5dc2f44-7ae2-49e9-bc77-b47b6bca565d"
+PATHSolver = "f5f7c340-0bb3-5c69-969a-41884d311d1b"
+XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
 
 [sources]
 CSVtoDIC = {rev = "master", url = "https://github.com/chenyhmitedu/CSVtoDIC"}
@@ -24,3 +26,5 @@ GTAPdata = "0.1.0"
 JLD2 = "0.6.5"
 JuMP = "1.31.1"
 MPSGE = "0.7.1"
+PATHSolver = "1.7.9"
+XLSX = "0.11.11"

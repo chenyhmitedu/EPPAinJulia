@@ -3,29 +3,27 @@ using Pkg
 
 Pkg.activate(".")
 
-#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
-#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
-
 #=
 Pkg.add([
 "CSV",
 "DataFrames",
 "JLD2",
 "JuMP",
-"MPSGE"
+"MPSGE",
+"PATHSolver",
+"XLSX"
 ])
 
 Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
 Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
-
 =#
+
+#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
+#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
 
 Pkg.instantiate()
 
 using EPPAinJulia
-using DataFrames
-using CSV
-using JLD2
 using JuMP
 using MPSGE
 
@@ -33,7 +31,7 @@ using MPSGE
 # Uno_data(): Use the EPPA variable and parameter notations
 # Uno_data without () refers to the function object itself. The |> operator expects a function on its RHS, not a function call.
 
-Prepare_data() = Load_gtap_data() |> Uno_data
+Prepare_data() = Load_gtap_data() |> Load_satellite_data |> Uno_data 
 data = Prepare_data()
 
 import PATHSolver
