@@ -10,6 +10,8 @@ data["set_ne"]      = setdiff(data["set_i"], data["set_e"])
 data["set_roil"]    = [:p_c]
 data["set_othr"]    = [:othr]
 data["set_serv"]    = [:serv]
+data["set_food"]   = [:food]
+data["set_eint"]   = [:eint]
 
 data["set_tr"]      = [:tran]
 data["set_con"]       = [:c]
@@ -18,6 +20,11 @@ data["set_inv"]     = [:i]
 
 data["set_fix"]     = [:fix]
 data["set_lnd"]     = setdiff(data["set_sf"], data["set_fix"])
+data["set_cg"]      = setdiff(data["set_fe"], data["set_roil"])
+data["set_rest"]    = setdiff(data["set_ne"], union(data["set_serv"], data["set_othr"], data["set_food"], data["set_eint"]))
+
+data["set_br"]      = [:BRA]
+data["set_nbr"]     = setdiff(data["set_r"], data["set_br"])
 
 #       EPPA parameters notation
 
@@ -119,17 +126,60 @@ data["tbo"] = Dict(
 )
 
 # tse(r)$(not bra(r))     = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("food",r))/pc0("serv",r);
-data["tse"] = Dict(
+# tse(r)$(bra(r))	      = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("eint",r))/pc0("serv",r);
+
+data["tse"] = merge(
+
+Dict(
     r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
          - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    ),
+
+Dict(
+    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
+    for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    )
+    
 )
 
 # own(r)                  = (pc0("roil",r)*tfo(r)+pc0("roil",r)*tbo(r)+pc0("othr",r)*toi(r)+pc0("serv",r)*tse(r));
+#=
 data["own"] = Dict(
     r => (1+data["ta0"][i, g, r])*(data["tfo"][r]+data["tbo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
     for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
 )
+=#
+
+
+data["own"] = Dict(
+    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
+    for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
+)
+
+#=
+            @input(PE[:p_c, :c, r],             data["tfo"][r],         s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PA[:othr, r],                data["toi"][r],         s,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
+            @input(PA[:serv, r],                data["tse"][r],         s,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
+=#
+
+data["xa0_r"] = Dict(
+    (r, i, g) => data["xa0"][r, i, g] - data["tfo"][r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
+)
+
+data["xa0_o"] = Dict(
+    (r, i, g) => data["xa0"][r, i, g] - data["toi"][r]
+    for r ∈ data["set_r"], i ∈ data["set_othr"], g ∈ data["set_con"]
+)
+
+data["xa0_s"] = Dict(
+    (r, i, g) => data["xa0"][r, i, g] - data["tse"][r]
+    for r ∈ data["set_r"], i ∈ data["set_serv"], g ∈ data["set_con"]
+)
+
+
 
 return data
 
