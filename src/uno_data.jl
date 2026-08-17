@@ -138,7 +138,7 @@ Dict(
 
 Dict(
     r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:eint, g, r])/(1+data["ta0"][:serv, g, r])
     for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
     )
     
