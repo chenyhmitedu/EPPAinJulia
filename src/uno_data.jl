@@ -131,14 +131,14 @@ data["tbo"] = Dict(
 data["tse"] = merge(
 
 Dict(
-    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
+    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:food, g, r]))/(1+data["ta0"][:serv, g, r])
     for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"]
     ),
 
 Dict(
-    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:eint, g, r])/(1+data["ta0"][:serv, g, r])
+    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:eint, g, r]))/(1+data["ta0"][:serv, g, r])
     for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
     )
     
@@ -179,7 +179,28 @@ data["xa0_s"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_serv"], g ∈ data["set_con"]
 )
 
+data["xa0_f"] = Dict(
+    (r, i, g) => data["xa0"][r, i, g] - data["tbo"][r]
+    for r ∈ data["set_r"], i ∈ data["set_serv"], g ∈ data["set_con"]
+)
 
+#=
+merge(
+
+Dict(
+    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
+    for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    ),
+
+Dict(
+    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
+         - data["tbo"][r]*(1+data["ta0"][:eint, g, r])/(1+data["ta0"][:serv, g, r])
+    for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    )
+    
+)
+=#
 
 return data
 
