@@ -125,6 +125,20 @@ data["tbo"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
 )
 
+data["tbo_r"] = merge(
+
+Dict(
+    r => data["tbo"][r]*(1+data["ta0"][:food, :c, r])
+    for r ∈ data["set_nbr"]
+),
+
+Dict(
+    r => data["tbo"][r]*(1+data["ta0"][:eint, :c, r])
+    for r ∈ data["set_br"]
+)
+
+)
+
 # tse(r)$(not bra(r))     = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("food",r))/pc0("serv",r);
 # tse(r)$(bra(r))	      = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("eint",r))/pc0("serv",r);
 
@@ -152,10 +166,33 @@ data["own"] = Dict(
 )
 =#
 
-
+#=
 data["own"] = Dict(
     r => (1+data["ta0"][i, g, r])*(data["tfo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
     for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
+)
+=#
+
+data["own"] = merge(
+
+Dict(
+    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]) 
+    + (1+data["ta0"][j, g, r])*data["toi"][r] 
+    + (1+data["ta0"][k, g, r])*data["tse"][r]
+    + (1+data["ta0"][m, g, r])*data["tbo"][r]
+
+    for r ∈ data["set_nbr"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"], m ∈ data["set_food"]
+),
+
+Dict(
+    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]) 
+    + (1+data["ta0"][j, g, r])*data["toi"][r] 
+    + (1+data["ta0"][k, g, r])*data["tse"][r]
+    + (1+data["ta0"][m, g, r])*data["tbo"][r]
+
+    for r ∈ data["set_br"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"], m ∈ data["set_eint"]
+)
+
 )
 
 #=
@@ -179,9 +216,32 @@ data["xa0_s"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_serv"], g ∈ data["set_con"]
 )
 
-data["xa0_f"] = Dict(
+data["xa0_f"] = merge(
+
+Dict(
     (r, i, g) => data["xa0"][r, i, g] - data["tbo"][r]
-    for r ∈ data["set_r"], i ∈ data["set_serv"], g ∈ data["set_con"]
+    for r ∈ data["set_nbr"], i ∈ data["set_food"], g ∈ data["set_con"]
+),
+
+Dict(
+    (r, i, g) => data["xa0"][r, i, g]
+    for r ∈ data["set_br"], i ∈ data["set_food"], g ∈ data["set_con"]
+)
+
+)
+
+data["xa0_e"] = merge(
+
+Dict(
+    (r, i, g) => data["xa0"][r, i, g] 
+    for r ∈ data["set_nbr"], i ∈ data["set_eint"], g ∈ data["set_con"]
+),
+
+Dict(
+    (r, i, g) => data["xa0"][r, i, g] - data["tbo"][r]
+    for r ∈ data["set_br"], i ∈ data["set_eint"], g ∈ data["set_con"]
+)
+
 )
 
 #=
