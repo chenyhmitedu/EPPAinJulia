@@ -83,14 +83,14 @@ data["cons0"] = Dict(
 
 # Value of tax-excluded government expenditure (td tax excluded)
 data["g0"] = Dict(
-    r => data["vom"][:g, r]
-    for r ∈ data["set_r"]
+    r => data["vom"][i, r]
+    for r ∈ data["set_r"], i ∈ data["set_gov"]
 )
 
 # Value of tax-excluded government investment (td tax excluded)
 data["inv0"] = Dict(
-    r => data["vom"][:i, r]
-    for r ∈ data["set_r"]
+    r => data["vom"][i, r]
+    for r ∈ data["set_r"], i ∈ data["set_inv"]
 )
 
 #       Household transportation
@@ -119,24 +119,29 @@ data["ebio"] = Dict(
     for r ∈ data["set_r"]
 )
 
+data["tb0"] = merge(
+
+Dict(
+    r => (data["ta0"][i, g, r]-data["ta0"][j, g, r])/(1+data["ta0"][j, g, r])
+    for r ∈ data["set_nbr"], i ∈ data["set_food"], g ∈ data["set_con"], j ∈ data["set_roil"]
+),
+
+Dict(
+    r => (data["ta0"][i, g, r]-data["ta0"][j, g, r])/(1+data["ta0"][j, g, r])
+    for r ∈ data["set_br"], i ∈ data["set_eint"], g ∈ data["set_con"], j ∈ data["set_roil"]
+)
+
+)
+
 # tbo(r)           = ebio(r)/pc0("roil",r);
 data["tbo"] = Dict(
     r => data["ebio"][r]/(1+data["ta0"][i, g, r])
     for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_con"]
 )
 
-data["tbo_r"] = merge(
-
-Dict(
-    r => data["tbo"][r]*(1+data["ta0"][:food, :c, r])
-    for r ∈ data["set_nbr"]
-),
-
-Dict(
-    r => data["tbo"][r]*(1+data["ta0"][:eint, :c, r])
-    for r ∈ data["set_br"]
-)
-
+data["tbo_r"] = Dict(
+    r => data["tbo"][r]*(1+data["tb0"][r])
+    for r ∈ data["set_r"]
 )
 
 # tse(r)$(not bra(r))     = (owntrn(r)-tfo(r)*pc0("roil",r)-toi(r)*pc0("othr",r)-tbo(r)*pc0("food",r))/pc0("serv",r);
@@ -145,33 +150,20 @@ Dict(
 data["tse"] = merge(
 
 Dict(
-    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:food, g, r]))/(1+data["ta0"][:serv, g, r])
-    for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][j, g, r])
+         - data["tbo"][r]*(1+data["ta0"][k, g, r]))/(1+data["ta0"][l, g, r])
+    for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"], j ∈ data["set_othr"], k ∈ data["set_food"], l ∈ data["set_serv"]
     ),
 
 Dict(
-    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:eint, g, r]))/(1+data["ta0"][:serv, g, r])
-    for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
+    r => (data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][j, g, r])
+         - data["tbo"][r]*(1+data["ta0"][k, g, r]))/(1+data["ta0"][l, g, r])
+    for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"], j ∈ data["set_othr"], k ∈ data["set_eint"], l ∈ data["set_serv"]
     )
     
 )
 
 # own(r)                  = (pc0("roil",r)*tfo(r)+pc0("roil",r)*tbo(r)+pc0("othr",r)*toi(r)+pc0("serv",r)*tse(r));
-#=
-data["own"] = Dict(
-    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]+data["tbo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
-    for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
-)
-=#
-
-#=
-data["own"] = Dict(
-    r => (1+data["ta0"][i, g, r])*(data["tfo"][r]) + (1+data["ta0"][j, g, r])*data["toi"][r] + (1+data["ta0"][k, g, r])*data["tse"][r]
-    for r ∈ data["set_r"], g ∈ data["set_con"], i ∈ data["set_roil"], j ∈ data["set_othr"], k ∈ data["set_serv"]
-)
-=#
 
 data["own"] = merge(
 
@@ -194,12 +186,6 @@ Dict(
 )
 
 )
-
-#=
-            @input(PE[:p_c, :c, r],             data["tfo"][r],         s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:othr, r],                data["toi"][r],         s,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:serv, r],                data["tse"][r],         s,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
-=#
 
 data["xa0_r"] = Dict(
     (r, i, g) => data["xa0"][r, i, g] - data["tfo"][r]
@@ -243,24 +229,6 @@ Dict(
 )
 
 )
-
-#=
-merge(
-
-Dict(
-    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:food, g, r])/(1+data["ta0"][:serv, g, r])
-    for r ∈ data["set_nbr"], i ∈ data["set_roil"], g ∈ data["set_con"]
-    ),
-
-Dict(
-    r => data["owntrn"][r] - data["tfo"][r]*(1+data["ta0"][i, g, r]) - data["toi"][r]*(1+data["ta0"][:othr, g, r])
-         - data["tbo"][r]*(1+data["ta0"][:eint, g, r])/(1+data["ta0"][:serv, g, r])
-    for r ∈ data["set_br"], i ∈ data["set_roil"], g ∈ data["set_con"]
-    )
-    
-)
-=#
 
 return data
 

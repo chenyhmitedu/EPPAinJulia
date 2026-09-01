@@ -7,6 +7,7 @@ function EPPACore(MGE, data, setting)
         td[r=data["set_r"],     g=data["set_g"]],                   data["rto0"][g, r],     (description = "Output tax or subsidy rates")
         ta[i=data["set_i"],     g=data["set_g"], r=data["set_r"]],  data["ta0"][i, g, r],   (description = "Tax rate on Armington good")
         tf[f=data["set_f"],     i=data["set_i"], r=data["set_r"]],  data["rtf0"][f, i, r],  (description = "Primary factor tax rates")
+        tb[r=data["set_r"]],                                        data["tb0"][r],         (description = "Tax rate on biofuels used by HHT")
     end)
 
     @sectors(MGE, begin
@@ -100,37 +101,27 @@ function EPPACore(MGE, data, setting)
         end)
     end
 
-    for r ∈ data["set_nbr"]
+    for r ∈ data["set_r"]
         @production(MGE, HHT[r], [t = 0, s = 1], begin
             @output(PH[r],                      data["own"][r],         t)
             @input(PE[:p_c, :c, r],             data["tfo"][r],         s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
             @input(PA[:othr, r],                data["toi"][r],         s,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
             @input(PA[:serv, r],                data["tse"][r],         s,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
-            @input(PB[r],                       data["tbo_r"][r],       s)
-        end)
-    end
-
-    for r ∈ data["set_br"]
-        @production(MGE, HHT[r], [t = 0, s = 1], begin
-            @output(PH[r],                      data["own"][r],         t)
-            @input(PE[:p_c, :c, r],             data["tfo"][r],         s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:othr, r],                data["toi"][r],         s,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:serv, r],                data["tse"][r],         s,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
-            @input(PB[r],                       data["tbo_r"][r],       s)
+            @input(PB[r],                       data["tbo_r"][r],       s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
         end)
     end
 
     for r ∈ data["set_nbr"]
         @production(MGE, B[r], [t = 0, s = 0], begin
             @output(PB[r],                      data["tbo_r"][r],       t)
-            @input(PA[:food, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], ta[:food, :c, r])], reference_price = 1+data["ta0"][:food, :c, r])
+            @input(PA[:food, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
         end)
     end
 
     for r ∈ data["set_br"]
         @production(MGE, B[r], [t = 0, s = 0], begin
             @output(PB[r],                      data["tbo_r"][r],       t)
-            @input(PA[:eint, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], ta[:eint, :c, r])], reference_price = 1+data["ta0"][:eint, :c, r])
+            @input(PA[:eint, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
         end)
     end
 
