@@ -71,7 +71,7 @@ function EPPACore(MGE, data, setting)
         @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
     end)
 
-    for g ∈ data["set_con"], r ∈ data["set_nbr"]
+    for g ∈ data["set_con"], r ∈ data["set_r"]
         @production(MGE, Z[r], [t = 0, s = data["esub"][g]], begin
             @output(PU[r],                      data["cons0"][r],       t,      taxes = [Tax(RA[r], td[r, g])])
             @input(PE[i=data["set_roil"], g, r],data["xa0_r"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
@@ -81,26 +81,11 @@ function EPPACore(MGE, data, setting)
             @input(PA[i=data["set_serv"], r],   data["xa0_s"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PA[i=data["set_othr"], r],   data["xa0_o"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PA[i=data["set_food"], r],   data["xa0_f"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_eint"], r],   data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PH[r],                       data["own"][r],         s)
-        end)
-    end
-    
-   for g ∈ data["set_con"], r ∈ data["set_br"]
-        @production(MGE, Z[r], [t = 0, s = data["esub"][g]], begin
-            @output(PU[r],                      data["cons0"][r],       t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_roil"], g, r],data["xa0_r"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_cg"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_rest"], r],   data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_serv"], r],   data["xa0_s"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_othr"], r],   data["xa0_o"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_food"], r],   data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PA[i=data["set_eint"], r],   data["xa0_e"][r, i, g], s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PH[r],                       data["own"][r],         s)
         end)
     end
-
+    
     for r ∈ data["set_r"]
         @production(MGE, HHT[r], [t = 0, s = 1], begin
             @output(PH[r],                      data["own"][r],         t)
