@@ -96,17 +96,14 @@ function EPPACore(MGE, data, setting)
         end)
     end
 
-    for r ∈ data["set_nbr"]
+    for r ∈ data["set_r"]
         @production(MGE, B[r], [t = 0, s = 0], begin
             @output(PB[r],                      data["tbo_r"][r],       t)
-            @input(PA[:food, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
-        end)
-    end
-
-    for r ∈ data["set_br"]
-        @production(MGE, B[r], [t = 0, s = 0], begin
-            @output(PB[r],                      data["tbo_r"][r],       t)
-            @input(PA[:eint, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
+            if r ∈ data["set_br"]
+                @input(PA[:eint, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
+            else
+                @input(PA[:food, r],                data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
+            end
         end)
     end
 
