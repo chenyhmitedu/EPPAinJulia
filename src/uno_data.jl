@@ -12,6 +12,7 @@ data["set_othr"]    = [:othr]
 data["set_serv"]    = [:serv]
 data["set_food"]   = [:food]
 data["set_eint"]   = [:eint]
+data["set_fnr"]    = setdiff(data["set_fe"], data["set_roil"])
 
 data["set_tr"]      = [:tran]
 data["set_con"]       = [:c]
@@ -229,6 +230,13 @@ Dict(
 )
 
 )
+
+data["cr"]  = Dict(
+    (i, g, r) => 0.9
+    for i ∈ data["set_roil"], g ∈ data["set_g"], r ∈ data["set_r"]
+)
+
+
 
 return data
 

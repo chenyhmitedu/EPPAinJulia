@@ -55,7 +55,13 @@ function EPPACore(MGE, data, setting)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
-    @production(MGE, A[i=data["set_fe"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, A[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
+        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
+        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
+    end)
+
+    @production(MGE, A[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
         @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
