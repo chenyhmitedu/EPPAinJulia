@@ -15,7 +15,8 @@ function EPPACore(MGE, data, setting)
         M[i=data["set_i"], r=data["set_r"]],                       (description = "Imports")
         YT[i=data["set_i"]],                                       (description = "Transportation services")
         X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Subsidy and transport service included exports")
-        A[i=data["set_i"], g=data["set_g"], r=data["set_r"]],      (description = "Armington good")
+        A[i=data["set_nern"], g=data["set_g"], r=data["set_r"]],   (description = "Armington good: nonenergy and noncombusted p_c")
+        EN[i=data["set_e"], g=data["set_g"], r=data["set_r"]],     (description = "Armington good: energy goods including all combusted and elec")
         Z[r=data["set_r"]],                                        (description = "Aggregate private consumption")
         GOV[r=data["set_r"]],                                      (description = "Aggregate government consumption")
         INV[r=data["set_r"]],                                      (description = "Investment")
@@ -30,8 +31,7 @@ function EPPACore(MGE, data, setting)
         PF[mf=data["set_mf"], r=data["set_r"]],                    (description = "Non-sector-specific primary factor rent")
         PS[sf=data["set_sf"], g=data["set_g"], r=data["set_r"]],   (description = "Sector-specific primary factor rent")  
         PX[i=data["set_i"], r=data["set_r"], s=data["set_r"]],     (description = "Price index for exports (include subsidy and transport service)")
-    #    PA[i=data["set_ne"], r=data["set_r"]],                     (description = "Price index for Armington good")
-        PA[i=data["set_i"], r=data["set_r"]],                       (description = "Price index for Armington good")
+        PA[i=data["set_nern"], r=data["set_r"]],                   (description = "Price index for Armington good")
         PE[i=data["set_e"], g=data["set_g"], r=data["set_r"]],     (description = "Price index for Armington energy good: carbon-penalty-inclusive")        
         PG[r=data["set_r"]],                                       (description = "Price index for aggregate government expenditure")
         PU[r=data["set_r"]],                                       (description = "Price index for aggregate consumption")
@@ -49,28 +49,30 @@ function EPPACore(MGE, data, setting)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
-    
-    @production(MGE, A[i=data["set_elec"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
-        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
-        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
-    end)
-
-    @production(MGE, A[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
-        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
-        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
-    end)
 
     @production(MGE, A[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
-#        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
-        @output(PE[i, g, r],                    data["xa0_c"][r, i, g],  t)
         @output(PA[i, r],                       data["xa0_n"][r, i, g],  t)
+        @input(PD[i, r],                        data["xd0_n"][r, i, g],   s)
+        @input(PM[i, r],                        data["xm0_n"][r, i, g],   s)  
+    end)
+
+    @production(MGE, EN[i=data["set_elec"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
+    @production(MGE, EN[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
+        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
+        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
+    end)
 
+    @production(MGE, EN[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+        @output(PE[i, g, r],                    data["xa0_c"][r, i, g],  t)
+        @input(PD[i, r],                        data["xd0_c"][r, i, g],   s)
+        @input(PM[i, r],                        data["xm0_c"][r, i, g],   s)  
+    end)
 
     @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
         @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    

@@ -43,4 +43,5 @@ MGE = EPPA_model(data, -1)
 solve!(MGE, cumulative_iteration_limit = 0)
 df = generate_report(MGE)
 dff = df[df.margin .> 1e-6, :]
-println(dff)
+#println(dff)
+println(df)

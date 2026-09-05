@@ -13,6 +13,7 @@ data["set_serv"]    = [:serv]
 data["set_food"]    = [:food]
 data["set_eint"]    = [:eint]
 data["set_fnr"]     = setdiff(data["set_fe"], data["set_roil"])
+data["set_nern"]    = union(data["set_ne"], data["set_roil"])
 
 data["set_tr"]      = [:tran]
 data["set_con"]     = [:c]
@@ -278,6 +279,27 @@ data["tfo_c"] = Dict(
 data["tfo_n"] = Dict(
     r => data["tfo"][r]*(1-data["cr"][i, j, r])
     for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_con"]
+)
+
+# Separate c and n parts of p_c's xd0 amd xm0
+data["xd0_c"] = Dict(
+    (r, i, j) => data["xd0"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+)
+
+data["xd0_n"] = Dict(
+    (r, i, j) => data["xd0"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
+)
+
+data["xm0_c"] = Dict(
+    (r, i, j) => data["xm0"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+)
+
+data["xm0_n"] = Dict(
+    (r, i, j) => data["xm0"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
 )
 
 return data
