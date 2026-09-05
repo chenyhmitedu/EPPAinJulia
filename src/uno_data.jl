@@ -10,18 +10,17 @@ data["set_ne"]      = setdiff(data["set_i"], data["set_e"])
 data["set_roil"]    = [:p_c]
 data["set_othr"]    = [:othr]
 data["set_serv"]    = [:serv]
-data["set_food"]   = [:food]
-data["set_eint"]   = [:eint]
-data["set_fnr"]    = setdiff(data["set_fe"], data["set_roil"])
+data["set_food"]    = [:food]
+data["set_eint"]    = [:eint]
+data["set_fnr"]     = setdiff(data["set_fe"], data["set_roil"])
 
 data["set_tr"]      = [:tran]
-data["set_con"]       = [:c]
+data["set_con"]     = [:c]
 data["set_gov"]     = [:g]
 data["set_inv"]     = [:i]
 
 data["set_fix"]     = [:fix]
 data["set_lnd"]     = setdiff(data["set_sf"], data["set_fix"])
-data["set_cg"]      = setdiff(data["set_fe"], data["set_roil"])
 data["set_rest"]    = setdiff(data["set_ne"], union(data["set_serv"], data["set_othr"], data["set_food"], data["set_eint"]))
 
 data["set_br"]      = [:BRA]
@@ -231,12 +230,55 @@ Dict(
 
 )
 
-data["cr"]  = Dict(
+# Combusted ratio of refined oil product p_c
+data["cr"]  = merge(
+
+Dict(
     (i, g, r) => 0.9
-    for i ∈ data["set_roil"], g ∈ data["set_g"], r ∈ data["set_r"]
+    for i ∈ data["set_roil"], g ∈ setdiff(data["set_g"], data["set_inv"]), r ∈ data["set_r"]
+),
+
+Dict(
+    (i, g, r) => 0.0
+    for i ∈ data["set_roil"], g ∈ data["set_inv"], r ∈ data["set_r"]
+)
 )
 
+# Refined oil products combusted used by industry and final consumption 
+data["xa0_c"] = Dict(
+    (r, i, j) => data["xa0"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+)
 
+# Refined oil products noncombusted used by industry and final consumption 
+data["xa0_n"] = Dict(
+    (r, i, j) => data["xa0"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
+)
+
+# Refined oil products combusted used by non-HHT private consumption
+data["xa0_rc"] = Dict(
+    (r, i, j) => data["xa0_r"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_con"]
+)
+
+# Refined oil products noncombusted used by non-HHT private consumption
+data["xa0_rn"] = Dict(
+    (r, i, j) => data["xa0_r"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_con"]
+)
+
+# Refined oil products combusted used by HHT
+data["tfo_c"] = Dict(
+    r => data["tfo"][r]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_con"]
+)
+
+# Refined oil products noncombusted used by HHT
+data["tfo_n"] = Dict(
+    r => data["tfo"][r]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_con"]
+)
 
 return data
 
