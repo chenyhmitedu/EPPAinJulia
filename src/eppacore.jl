@@ -39,38 +39,37 @@ function EPPACore(MGE, data, setting)
         PI[r=data["set_r"]],                                       (description = "Price index for investment")
         PN[r=data["set_r"]],                                       (description = "Price index for household transportation: Own-supplied")
         PH[r=data["set_r"]],                                       (description = "Price index for household transportation: Total")
-        PB[r=data["set_r"]],                                       (description = "Price index for traditional biofuels")
     end)
 
     @consumers(MGE, begin
         RA[r=data["set_r"]],                                       (description = "Representative agent")
     end)
 
-    @production(MGE, A[i=data["set_ne"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, A[i=data["set_ne"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PA[i, r],                       data["xa0"][r, i, g],   t)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
-    @production(MGE, A[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, A[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PA[i, r],                       data["xa0_n"][r, i, g],  t)
         @input(PD[i, r],                        data["xd0_n"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0_n"][r, i, g],   s)  
     end)
 
-    @production(MGE, EN[i=data["set_elec"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, EN[i=data["set_elec"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
-    @production(MGE, EN[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, EN[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
         @input(PD[i, r],                        data["xd0"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
     end)
 
-    @production(MGE, EN[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = data["esubd"][i]], begin
+    @production(MGE, EN[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PE[i, g, r],                    data["xa0_c"][r, i, g],  t)
         @input(PD[i, r],                        data["xd0_c"][r, i, g],   s)
         @input(PM[i, r],                        data["xm0_c"][r, i, g],   s)  
@@ -107,7 +106,7 @@ function EPPACore(MGE, data, setting)
 
     # Household transportation: Total
     for r ∈ data["set_r"], g ∈ data["set_con"]
-        @production(MGE, HHT[r], [t = 0, s = 1], begin
+        @production(MGE, HHT[r], [t = 0, s = 0.2], begin
             @output(PH[r],                      data["tottrn"][r],      t)
             @input(PN[r],                       data["own"][r],         s)
             @input(PA[i=data["set_tran"], r],   data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
@@ -116,19 +115,20 @@ function EPPACore(MGE, data, setting)
 
     # Household transportation: Own-supplied
     for r ∈ data["set_r"]
-        @production(MGE, HOW[r], [t = 0, s = 1], begin
+        @production(MGE, HOW[r], [t = 0, s = 0.1 a => s = 0.75, c => a = 0.0, b => s = 1.0], begin
             @output(PN[r],                      data["own"][r],         t)
-            @input(PE[:p_c, :c, r],             data["tfo_c"][r],       s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:p_c, r],                 data["tfo_n"][r],       s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:othr, r],                data["toi"][r],         s,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:serv, r],                data["tse"][r],         s,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
-            @input(PB[r],                       data["tbo_r"][r],       s,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PE[:p_c, :c, r],             data["tfb_c"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PA[:p_c, r],                 data["tfo_n"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PA[:othr, r],                data["toi_prop"][r],    a,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
+            @input(PA[:othr, r],                data["toi_rest"][r],    b,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
+            @input(PA[:serv, r],                data["tse"][r],         b,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
         end)
     end
 
+    # * In EPPA8, pdb is converted to paf_gh in an "one-input-one-output" fashion, which means biofuels and roil are perfect substitutes
     for r ∈ data["set_r"]
         @production(MGE, B[r], [t = 0, s = 0], begin
-            @output(PB[r],                      data["tbo_r"][r],       t)
+            @output(PE[:p_c, :c, r],            data["tbo_r"][r],       t)
             if r ∈ data["set_br"]
                 @input(PA[:eint, r],            data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
             else

@@ -309,6 +309,26 @@ data["xm0_n"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
 )
 
+data["propfrac"] = Dict(
+    r => 0.2
+    for r ∈ data["set_r"]
+)
+
+data["toi_prop"] = Dict(
+    r => data["toi"][r]*data["propfrac"][r]
+    for r ∈ data["set_r"] 
+)
+
+data["toi_rest"] = Dict(
+    r => data["toi"][r]*(1-data["propfrac"][r])
+    for r ∈ data["set_r"] 
+)
+
+data["tfb_c"] = Dict(
+    r => data["tfo_c"][r] + data["tbo_r"][r]
+    for r ∈ data["set_r"]
+)
+
 return data
 
 end
