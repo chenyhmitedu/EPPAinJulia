@@ -16,7 +16,6 @@ data["set_fnr"]     = setdiff(data["set_fe"], data["set_roil"])
 data["set_nern"]    = union(data["set_ne"], data["set_roil"])
 data["set_dwe"]     = [:dwe]
 data["set_tran"]    = [:tran]
-data["set_nendt"]   = setdiff(data["set_ne"], union(data["set_dwe"], data["set_tran"]))
 
 data["set_tr"]      = [:tran]
 data["set_con"]     = [:c]
@@ -25,7 +24,7 @@ data["set_inv"]     = [:i]
 
 data["set_fix"]     = [:fix]
 data["set_lnd"]     = setdiff(data["set_sf"], data["set_fix"])
-data["set_rest"]    = setdiff(data["set_ne"], union(data["set_serv"], data["set_othr"], data["set_food"], data["set_eint"], data["set_tran"]))
+data["set_rest"]    = setdiff(data["set_ne"], union(data["set_serv"], data["set_othr"], data["set_food"], data["set_eint"], data["set_tran"], data["set_dwe"]))
 
 data["set_br"]      = [:BRA]
 data["set_nbr"]     = setdiff(data["set_r"], data["set_br"])
