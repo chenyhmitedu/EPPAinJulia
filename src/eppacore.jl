@@ -11,7 +11,8 @@ function EPPACore(MGE, data, setting)
     end)
 
     @sectors(MGE, begin
-        D[i=data["set_i"], r=data["set_r"]],                       (description = "Supply")
+        D[i=data["set_note"], r=data["set_r"]],                    (description = "Supply")
+        DE[i=data["set_elec"], r=data["set_r"]],                   (description = "Supply")
         M[i=data["set_i"], r=data["set_r"]],                       (description = "Imports")
         YT[i=data["set_i"]],                                       (description = "Transportation services")
         X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Subsidy and transport service included exports")
@@ -75,7 +76,19 @@ function EPPACore(MGE, data, setting)
         @input(PM[i, r],                        data["xm0_c"][r, i, g],   s)  
     end)
 
-    @production(MGE, D[g=data["set_i"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
+    @production(MGE, D[g=data["set_note"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
+        @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
+        @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g], fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],   fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],   ee,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],   nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PA[i=data["set_roil"], r],       data["xa0_n"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],  s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
+        @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],  nl,     taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
+        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
+    end)
+
+    @production(MGE, DE[g=data["set_elec"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
         @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
         @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g], fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
         @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],   fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
@@ -115,7 +128,7 @@ function EPPACore(MGE, data, setting)
 
     # Household transportation: Own-supplied
     for r ∈ data["set_r"]
-        @production(MGE, HOW[r], [t = 0, s = 0.1 a => s = 0.75, c => a = 0.0, b => s = 1.0], begin
+        @production(MGE, HOW[r], [t = 0, s = 0.1, a => s = 0.75, c => a = 0.0, b => s = 1.0], begin
             @output(PN[r],                      data["own"][r],         t)
             @input(PE[:p_c, :c, r],             data["tfb_c"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
             @input(PA[:p_c, r],                 data["tfo_n"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])

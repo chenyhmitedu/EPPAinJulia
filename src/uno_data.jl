@@ -5,6 +5,7 @@ function Uno_data(data::Dict)
 # Vectors below may be changed depending on the sectoral names and resolution
 data["set_fe"]      = [:coa, :gas, :p_c, :oil]
 data["set_elec"]    = [:elec]
+data["set_note"]    = setdiff(data["set_i"], data["set_elec"])
 data["set_e"]       = union(data["set_fe"], data["set_elec"])
 data["set_ne"]      = setdiff(data["set_i"], data["set_e"])
 data["set_roil"]    = [:p_c]
