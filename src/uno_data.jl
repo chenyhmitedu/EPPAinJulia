@@ -331,7 +331,12 @@ data["tfb_c"] = Dict(
     for r ∈ data["set_r"]
 )
 
-# Disaggregated power sectors
+data["w0"] = Dict(
+    r => data["cons0"][r] + data["inv0"][r]
+    for r ∈ data["set_r"]
+)
+
+#### Disaggregated power sectors ####
 
 # xp0(r,i)	= vom(i,r);
 disa["xp0"] = Dict(

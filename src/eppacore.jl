@@ -28,6 +28,7 @@ function EPPACore(MGE, data, setting)
         HOW[r=data["set_r"]],                                      (description = "Household transportation: Own-supplied")
         HHT[r=data["set_r"]],                                      (description = "Household transportation: Total")        
         B[r=data["set_r"]],                                        (description = "Conversion to traditional biofuels")
+        W[r=data["set_r"]],                                        (description = "Aggregate private consumption")
     end)
 
     @commodities(MGE, begin
@@ -44,6 +45,7 @@ function EPPACore(MGE, data, setting)
         PI[r=data["set_r"]],                                       (description = "Price index for investment")
         PN[r=data["set_r"]],                                       (description = "Price index for household transportation: Own-supplied")
         PH[r=data["set_r"]],                                       (description = "Price index for household transportation: Total")
+        PW[r=data["set_r"]],                                       (description = "Price index for saving included welfare")
     end)
 
     @consumers(MGE, begin
@@ -155,7 +157,7 @@ function EPPACore(MGE, data, setting)
     end
 
     for g ∈ data["set_gov"], r ∈ data["set_r"]
-        @production(MGE, GOV[r], [t = 0, s = data["esub"][g]], begin
+        @production(MGE, GOV[r], [t = 0, s = 0.5], begin
             @output(PG[r],                      data["g0"][r],              t,      taxes = [Tax(RA[r], td[r, g])])
             @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
@@ -164,7 +166,7 @@ function EPPACore(MGE, data, setting)
     end
 
     for g ∈ data["set_inv"], r ∈ data["set_r"]
-        @production(MGE, INV[r], [t = 0, s = data["esub"][g]], begin
+        @production(MGE, INV[r], [t = 0, s = 5], begin
             @output(PI[r],                      data["inv0"][r],            t,      taxes = [Tax(RA[r], td[r, g])])
             @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
             @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
@@ -177,7 +179,7 @@ function EPPACore(MGE, data, setting)
         @input(PD[j, r=data["set_r"]],          data["vst"][j, r],          s)
     end)
 
-    @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = data["esubm"][i]], begin
+    @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = 5], begin
         @output(PM[i, r],                       data["vim"][i, r],          t)
         @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],        s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
     end)
@@ -188,11 +190,16 @@ function EPPACore(MGE, data, setting)
         @input(PT[j=data["set_i"]],             data["vtwr"][j, i, s, r],   s)
     end)
 
+    @production(MGE, W[r=data["set_r"]], [t = 0, s = 0.5], begin
+        @output(PW[r],                          data["w0"][r],              t)
+        @input(PU[r],                           data["cons0"][r],           s)
+        @input(PI[r],                           data["inv0"][r],            s)
+    end)
+
     @demand(MGE, RA[r=data["set_r"]], begin
-        @final_demand(PU[r],                                    data["cons0"][r])
+        @final_demand(PW[r],                                    data["w0"][r])
         @endowment(PU[:USA],                                    data["vb"][r])
         @endowment(PG[r],                                      -data["g0"][r])
-        @endowment(PI[r],                                      -data["inv0"][r])
         @endowment(PF[f=data["set_mf"], r],                     data["evom"][f, r])
         @endowment(PS[f=data["set_fix"], j=data["set_i"], r],   data["vfm"][f, j, r])
         @endowment(PS[f=data["set_lnd"], j=data["set_i"], r],   data["vfm"][f, j, r])
