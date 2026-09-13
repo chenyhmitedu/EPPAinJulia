@@ -1,4 +1,4 @@
-function Uno_data(data::Dict)
+function Uno_data(data::Dict, disa::Dict)
 
 #       Model specific sets
 
@@ -6,6 +6,7 @@ function Uno_data(data::Dict)
 data["set_fe"]      = [:coa, :gas, :p_c, :oil]
 data["set_elec"]    = [:elec]
 data["set_note"]    = setdiff(data["set_i"], data["set_elec"])
+data["set_gne"]     = setdiff(data["set_g"], data["set_elec"])
 data["set_e"]       = union(data["set_fe"], data["set_elec"])
 data["set_ne"]      = setdiff(data["set_i"], data["set_e"])
 data["set_roil"]    = [:p_c]
@@ -49,7 +50,7 @@ data["ta0"] = Dict(
     (i, j, r) => 
         begin
             num = data["vdfm"][i, j, r] * data["rtfd0"][i, j, r] + data["vifm"][i, j, r] * data["rtfi0"][i, j, r]
-            den = data["xd0"][r, i, j] + data["xm0"][r, i, j]
+            den = data["vdfm"][i, j, r] + data["vifm"][i, j, r]
             iszero(den) ? 0.0 : num / den
         end
         for i ∈ data["set_i"], j ∈ data["set_g"], r ∈ data["set_r"]
@@ -329,6 +330,170 @@ data["tfb_c"] = Dict(
     r => data["tfo_c"][r] + data["tbo_r"][r]
     for r ∈ data["set_r"]
 )
+
+# Disaggregated power sectors
+
+# xp0(r,i)	= vom(i,r);
+disa["xp0"] = Dict(
+    (r, i) => disa["vom"][i, r]
+    for r ∈ disa["set_r"], i ∈ disa["set_i"]
+)
+
+# Tax rate on Armington input
+disa["ta0"] = Dict(
+    (i, j, r) => 
+        begin
+            num = disa["vdfm"][i, j, r] * disa["rtfd0"][i, j, r] + disa["vifm"][i, j, r] * disa["rtfi0"][i, j, r]
+            den = disa["vdfm"][i, j, r] + disa["vifm"][i, j, r]
+            iszero(den) ? 0.0 : num / den
+        end
+        for i ∈ disa["set_i"], j ∈ disa["set_i"], r ∈ disa["set_r"]
+)
+
+# Pre-tax Armington good;
+disa["xa0"] = Dict(
+    (r, i, j) => disa["vafm"][i, j, r]/(1+disa["ta0"][i, j, r])
+    for r ∈ disa["set_r"], i ∈ disa["set_i"], j ∈ disa["set_i"]
+)
+
+# Take all elements in disa["set_i"] that are not in data["set_i"]
+disa["set_v"]   = setdiff(disa["set_i"], data["set_i"])
+
+data["ta0e"] = merge(
+
+Dict(
+    (i, j, r) => 
+        begin
+            num = sum(disa["vdfm"][i, j, r] * disa["rtfd0"][i, j, r] + disa["vifm"][i, j, r] * disa["rtfi0"][i, j, r] for i ∈ disa["set_v"])
+            den = sum(disa["vdfm"][i, j, r] + disa["vifm"][i, j, r] for i ∈ disa["set_v"])
+            iszero(den) ? 0.0 : num / den
+        end
+    for i ∈ data["set_elec"], j ∈ disa["set_v"], r ∈ disa["set_r"]
+    ),
+Dict(
+    (i, j, r) => disa["ta0"][i, j, r]
+    for i ∈ data["set_note"], j ∈ disa["set_v"], r ∈ disa["set_r"]
+    )
+)
+
+data["xp0e"] = Dict(
+    (r, i) => disa["xp0"][r, i]
+    for r ∈ data["set_r"], i ∈ disa["set_v"]
+)
+
+data["xa0e"] = merge(
+
+Dict(
+    (r, i, j) => sum(disa["vafm"][i, j, r] for i ∈ disa["set_v"])/(1+data["ta0e"][i, j, r])
+    for r ∈ disa["set_r"], i ∈ data["set_elec"], j ∈ disa["set_v"]
+),
+Dict(
+    (r, i, j) => disa["xa0"][r, i, j]
+    for r ∈ disa["set_r"], i ∈ data["set_note"], j ∈ disa["set_v"]
+)
+
+)
+
+# Refined oil products combusted used by industry and final consumption 
+data["xa0e_c"] = Dict(
+    (r, i, j) => data["xa0e"][r, i, j]*data["cr"][i, k, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+# Refined oil products noncombusted used by industry and final consumption 
+data["xa0e_n"] = Dict(
+    (r, i, j) => data["xa0e"][r, i, j]*(1-data["cr"][i, k, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+data["xd0e"] = merge(
+
+Dict(
+    (r, i, j) => sum(disa["vdfm"][i, j, r] for i ∈ disa["set_v"])
+    for r ∈ disa["set_r"], i ∈ data["set_elec"], j ∈ disa["set_v"]
+),
+Dict(
+    (r, i, j) => disa["vdfm"][i, j, r]
+    for r ∈ disa["set_r"], i ∈ data["set_note"], j ∈ disa["set_v"]
+)
+
+)
+
+# Refined oil products combusted used by industry and final consumption 
+data["xd0e_c"] = Dict(
+    (r, i, j) => data["xd0e"][r, i, j]*data["cr"][i, k, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+# Refined oil products noncombusted used by industry and final consumption 
+data["xd0e_n"] = Dict(
+    (r, i, j) => data["xd0e"][r, i, j]*(1-data["cr"][i, k, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+data["xm0e"] = merge(
+
+Dict(
+    (r, i, j) => sum(disa["vifm"][i, j, r] for i ∈ disa["set_v"])
+    for r ∈ disa["set_r"], i ∈ data["set_elec"], j ∈ disa["set_v"]
+),
+Dict(
+    (r, i, j) => disa["vifm"][i, j, r]
+    for r ∈ disa["set_r"], i ∈ data["set_note"], j ∈ disa["set_v"]
+)
+
+)
+
+# Refined oil products combusted used by industry and final consumption 
+data["xm0e_c"] = Dict(
+    (r, i, j) => data["xm0e"][r, i, j]*data["cr"][i, k, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+# Refined oil products noncombusted used by industry and final consumption 
+data["xm0e_n"] = Dict(
+    (r, i, j) => data["xm0e"][r, i, j]*(1-data["cr"][i, k, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+)
+
+
+data["set_v"]   = disa["set_v"]
+data["set_gv"]  = data["set_g"] ∪ data["set_v"]
+data["vfme"]    = disa["vfm"]
+data["rto0e"]   = disa["rto0"]
+data["rtf0e"]   = disa["rtf0"]
+data["set_gnev"]= data["set_gne"] ∪ data["set_v"]
+
+# xa0a data combine both set_v data and set_gne data
+data["xa0a"] = copy(data["xa0e"])
+data["xd0a"] = copy(data["xd0e"])
+data["xm0a"] = copy(data["xm0e"])
+
+for r ∈ data["set_r"], i ∈ data["set_i"], g ∈ data["set_gne"]
+    data["xa0a"][r, i, g] = data["xa0"][r, i, g]
+    data["xd0a"][r, i, g] = data["xd0"][r, i, g]
+    data["xm0a"][r, i, g] = data["xm0"][r, i, g]
+end
+
+data["xa0a_c"] = copy(data["xa0e_c"])
+data["xd0a_c"] = copy(data["xd0e_c"])
+data["xm0a_c"] = copy(data["xm0e_c"])
+
+for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_gne"]
+    data["xa0a_c"][r, i, g] = data["xa0_c"][r, i, g]
+    data["xd0a_c"][r, i, g] = data["xd0_c"][r, i, g]
+    data["xm0a_c"][r, i, g] = data["xm0_c"][r, i, g]
+end
+
+data["xa0a_n"] = copy(data["xa0e_n"])
+data["xd0a_n"] = copy(data["xd0e_n"])
+data["xm0a_n"] = copy(data["xm0e_n"])
+
+for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_gne"]
+    data["xa0a_n"][r, i, g] = data["xa0_n"][r, i, g]
+    data["xd0a_n"][r, i, g] = data["xd0_n"][r, i, g]
+    data["xm0a_n"][r, i, g] = data["xm0_n"][r, i, g]
+end
 
 return data
 

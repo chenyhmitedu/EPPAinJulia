@@ -8,16 +8,20 @@ function EPPACore(MGE, data, setting)
         ta[i=data["set_i"],     g=data["set_g"], r=data["set_r"]],  data["ta0"][i, g, r],   (description = "Tax rate on Armington good")
         tf[f=data["set_f"],     i=data["set_i"], r=data["set_r"]],  data["rtf0"][f, i, r],  (description = "Primary factor tax rates")
         tb[r=data["set_r"]],                                        data["tb0"][r],         (description = "Tax rate on biofuels used by HOW")
+        tde[r=data["set_r"],    g=data["set_v"]],                   data["rto0e"][g, r],    (description = "Output tax or subsidy rates")
+        tae[i=data["set_i"],    g=data["set_v"], r=data["set_r"]],  data["ta0e"][i, g, r],  (description = "Tax rate on Armington good")
+        tfe[f=data["set_f"],    i=data["set_v"], r=data["set_r"]],  data["rtf0e"][f, i, r], (description = "Primary factor tax rates")
+
     end)
 
     @sectors(MGE, begin
         D[i=data["set_note"], r=data["set_r"]],                    (description = "Supply")
-        DE[i=data["set_elec"], r=data["set_r"]],                   (description = "Supply")
+        DE[i=data["set_v"], r=data["set_r"]],                      (description = "Supply")
         M[i=data["set_i"], r=data["set_r"]],                       (description = "Imports")
         YT[i=data["set_i"]],                                       (description = "Transportation services")
         X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Subsidy and transport service included exports")
-        A[i=data["set_nern"], g=data["set_g"], r=data["set_r"]],   (description = "Armington good: nonenergy and noncombusted p_c")
-        EN[i=data["set_e"], g=data["set_g"], r=data["set_r"]],     (description = "Armington good: energy goods including all combusted and elec")
+        A[i=data["set_nern"], g=data["set_gnev"], r=data["set_r"]],(description = "Armington good: nonenergy and noncombusted p_c")
+        EN[i=data["set_e"], g=data["set_gnev"], r=data["set_r"]],  (description = "Armington good: energy goods including all combusted and elec")
         Z[r=data["set_r"]],                                        (description = "Aggregate private consumption")
         GOV[r=data["set_r"]],                                      (description = "Aggregate government consumption")
         INV[r=data["set_r"]],                                      (description = "Investment")
@@ -31,10 +35,10 @@ function EPPACore(MGE, data, setting)
         PM[i=data["set_i"], r=data["set_r"]],                      (description = "Import price")
         PT[i=data["set_i"]],                                       (description = "Transportation services")
         PF[mf=data["set_mf"], r=data["set_r"]],                    (description = "Non-sector-specific primary factor rent")
-        PS[sf=data["set_sf"], g=data["set_g"], r=data["set_r"]],   (description = "Sector-specific primary factor rent")  
+        PS[sf=data["set_sf"], g=data["set_gv"], r=data["set_r"]],  (description = "Sector-specific primary factor rent")  
         PX[i=data["set_i"], r=data["set_r"], s=data["set_r"]],     (description = "Price index for exports (include subsidy and transport service)")
         PA[i=data["set_nern"], r=data["set_r"]],                   (description = "Price index for Armington good")
-        PE[i=data["set_e"], g=data["set_g"], r=data["set_r"]],     (description = "Price index for Armington energy good: carbon-penalty-inclusive")        
+        PE[i=data["set_e"], g=data["set_gv"], r=data["set_r"]],    (description = "Price index for Armington energy good: carbon-penalty-inclusive")        
         PG[r=data["set_r"]],                                       (description = "Price index for aggregate government expenditure")
         PU[r=data["set_r"]],                                       (description = "Price index for aggregate consumption")
         PI[r=data["set_r"]],                                       (description = "Price index for investment")
@@ -46,142 +50,142 @@ function EPPACore(MGE, data, setting)
         RA[r=data["set_r"]],                                       (description = "Representative agent")
     end)
 
-    @production(MGE, A[i=data["set_ne"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PA[i, r],                       data["xa0"][r, i, g],   t)
-        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
+    @production(MGE, A[i=data["set_ne"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
+        @output(PA[i, r],                       data["xa0a"][r, i, g],      t)
+        @input(PD[i, r],                        data["xd0a"][r, i, g],      s)
+        @input(PM[i, r],                        data["xm0a"][r, i, g],      s)  
     end)
 
-    @production(MGE, A[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PA[i, r],                       data["xa0_n"][r, i, g],  t)
-        @input(PD[i, r],                        data["xd0_n"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0_n"][r, i, g],   s)  
+    @production(MGE, A[i=data["set_roil"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
+        @output(PA[i, r],                       data["xa0a_n"][r, i, g],    t)
+        @input(PD[i, r],                        data["xd0a_n"][r, i, g],    s)
+        @input(PM[i, r],                        data["xm0a_n"][r, i, g],    s)  
     end)
 
-    @production(MGE, EN[i=data["set_elec"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
-        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
+    @production(MGE, EN[i=data["set_elec"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
+        @output(PE[i, g, r],                    data["xa0a"][r, i, g],      t)
+        @input(PD[i, r],                        data["xd0a"][r, i, g],      s)
+        @input(PM[i, r],                        data["xm0a"][r, i, g],      s)  
     end)
 
-    @production(MGE, EN[i=data["set_fnr"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PE[i, g, r],                    data["xa0"][r, i, g],   t)
-        @input(PD[i, r],                        data["xd0"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0"][r, i, g],   s)  
+    @production(MGE, EN[i=data["set_fnr"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
+        @output(PE[i, g, r],                    data["xa0a"][r, i, g],      t)
+        @input(PD[i, r],                        data["xd0a"][r, i, g],      s)
+        @input(PM[i, r],                        data["xm0a"][r, i, g],      s)  
     end)
 
-    @production(MGE, EN[i=data["set_roil"], g=data["set_g"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PE[i, g, r],                    data["xa0_c"][r, i, g],  t)
-        @input(PD[i, r],                        data["xd0_c"][r, i, g],   s)
-        @input(PM[i, r],                        data["xm0_c"][r, i, g],   s)  
+    @production(MGE, EN[i=data["set_roil"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
+        @output(PE[i, g, r],                    data["xa0a_c"][r, i, g],    t)
+        @input(PD[i, r],                        data["xd0a_c"][r, i, g],    s)
+        @input(PM[i, r],                        data["xm0a_c"][r, i, g],    s)  
     end)
 
     @production(MGE, D[g=data["set_note"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
-        @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
-        @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g], fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],   fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],   ee,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],   nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PA[i=data["set_roil"], r],       data["xa0_n"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],  s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
-        @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],  nl,     taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
-        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
+        @output(PD[g, r],                       data["xp0"][r, g],          t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
+        @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g],     fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],       fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],       ee,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],       nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PA[i=data["set_roil"], r],       data["xa0_n"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
+        @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],      s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
+        @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],      nl,     taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
+        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],      va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
     end)
 
-    @production(MGE, DE[g=data["set_elec"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
-        @output(PD[g, r],                       data["xp0"][r, g],      t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])    
-        @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g], fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],   fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],   ee,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],   nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PA[i=data["set_roil"], r],       data["xa0_n"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-        @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],  s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
-        @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],  nl,     taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])    
-        @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],  va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])    
+    @production(MGE, DE[g=data["set_v"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
+        @output(PD[:elec, r],                   data["xp0e"][r, g],         t,      taxes = [Tax(RA[r], tde[r, g])],     reference_price = 1-data["rto0e"][g, r])    
+        @input(PE[i=data["set_roil"], g, r],    data["xa0e_c"][r, i, g],    fe,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
+        @input(PE[i=data["set_fnr"], g, r],     data["xa0e"][r, i, g],      fe,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
+        @input(PE[i=data["set_elec"], g, r],    data["xa0e"][r, i, g],      ee,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
+        @input(PA[i=data["set_ne"], r],         data["xa0e"][r, i, g],      nn,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
+        @input(PA[i=data["set_roil"], r],       data["xa0e_n"][r, i, g],    nn,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
+        @input(PS[sf=data["set_fix"], g, r],    data["vfme"][sf, g, r],     s,      taxes = [Tax(RA[r], tfe[sf, g, r])], reference_price = 1 + data["rtf0e"][sf, g, r])    
+        @input(PS[sf=data["set_lnd"], g, r],    data["vfme"][sf, g, r],     nl,     taxes = [Tax(RA[r], tfe[sf, g, r])], reference_price = 1 + data["rtf0e"][sf, g, r])    
+        @input(PF[mf=data["set_mf"], r],        data["vfme"][mf, g, r],     va,     taxes = [Tax(RA[r], tfe[mf, g, r])], reference_price = 1 + data["rtf0e"][mf, g, r])    
     end)
 
     for g ∈ data["set_con"], r ∈ data["set_r"]
         @production(MGE, Z[r], [t = 0, s = 0, nh => s = 0.5, ne => nh = 0.25, nn => ne = 0.25, nd => ne = 0.3, ee => nd = 1.5, fe => ee = 1.5], begin
-            @output(PU[r],                      data["cons0"][r],       t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_roil"], g, r],data["xa0_rc"][r, i, g],fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_fnr"], g, r], data["xa0"][r, i, g],   fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   ee,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_rest"], r],   data["xa0"][r, i, g],   nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_serv"], r],   data["xa0_s"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_othr"], r],   data["xa0_o"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_food"], r],   data["xa0_f"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_eint"], r],   data["xa0_e"][r, i, g], nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_roil"], r],   data["xa0_rn"][r, i, g],nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_dwe"], r],    data["xa0"][r, i, g],   nd,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PH[r],                       data["tottrn"][r],      nh)
+            @output(PU[r],                      data["cons0"][r],           t,      taxes = [Tax(RA[r], td[r, g])])
+            @input(PE[i=data["set_roil"], g, r],data["xa0_rc"][r, i, g],    fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_fnr"], g, r], data["xa0"][r, i, g],       fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       ee,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_rest"], r],   data["xa0"][r, i, g],       nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_serv"], r],   data["xa0_s"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_othr"], r],   data["xa0_o"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_food"], r],   data["xa0_f"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_eint"], r],   data["xa0_e"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_roil"], r],   data["xa0_rn"][r, i, g],    nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_dwe"], r],    data["xa0"][r, i, g],       nd,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PH[r],                       data["tottrn"][r],          nh)
         end)
     end
 
     # Household transportation: Total
     for r ∈ data["set_r"], g ∈ data["set_con"]
         @production(MGE, HHT[r], [t = 0, s = 0.2], begin
-            @output(PH[r],                      data["tottrn"][r],      t)
-            @input(PN[r],                       data["own"][r],         s)
-            @input(PA[i=data["set_tran"], r],   data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @output(PH[r],                      data["tottrn"][r],          t)
+            @input(PN[r],                       data["own"][r],             s)
+            @input(PA[i=data["set_tran"], r],   data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
     # Household transportation: Own-supplied
     for r ∈ data["set_r"]
         @production(MGE, HOW[r], [t = 0, s = 0.1, a => s = 0.75, c => a = 0.0, b => s = 1.0], begin
-            @output(PN[r],                      data["own"][r],         t)
-            @input(PE[:p_c, :c, r],             data["tfb_c"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:p_c, r],                 data["tfo_n"][r],       c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:othr, r],                data["toi_prop"][r],    a,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:othr, r],                data["toi_rest"][r],    b,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:serv, r],                data["tse"][r],         b,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
+            @output(PN[r],                      data["own"][r],             t)
+            @input(PE[:p_c, :c, r],             data["tfb_c"][r],           c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PA[:p_c, r],                 data["tfo_n"][r],           c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
+            @input(PA[:othr, r],                data["toi_prop"][r],        a,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
+            @input(PA[:othr, r],                data["toi_rest"][r],        b,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
+            @input(PA[:serv, r],                data["tse"][r],             b,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
         end)
     end
 
-    # * In EPPA8, pdb is converted to paf_gh in an "one-input-one-output" fashion, which means biofuels and roil are perfect substitutes
+    # In EPPA8, pdb is converted to paf_gh in an "one-input-one-output" fashion, which means biofuels and roil are perfect substitutes
     for r ∈ data["set_r"]
         @production(MGE, B[r], [t = 0, s = 0], begin
-            @output(PE[:p_c, :c, r],            data["tbo_r"][r],       t)
-            if r ∈ data["set_br"]
-                @input(PA[:eint, r],            data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
-            else
-                @input(PA[:food, r],            data["tbo"][r],         s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
+            @output(PE[:p_c, :c, r],            data["tbo_r"][r],           t)
+            if r ∈ data["set_br"]   
+                @input(PA[:eint, r],            data["tbo"][r],             s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
+            else    
+                @input(PA[:food, r],            data["tbo"][r],             s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
             end
         end)
     end
 
     for g ∈ data["set_gov"], r ∈ data["set_r"]
         @production(MGE, GOV[r], [t = 0, s = data["esub"][g]], begin
-            @output(PG[r],                      data["g0"][r],          t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @output(PG[r],                      data["g0"][r],              t,      taxes = [Tax(RA[r], td[r, g])])
+            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
     for g ∈ data["set_inv"], r ∈ data["set_r"]
         @production(MGE, INV[r], [t = 0, s = data["esub"][g]], begin
-            @output(PI[r],                      data["inv0"][r],        t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],   s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @output(PI[r],                      data["inv0"][r],            t,      taxes = [Tax(RA[r], td[r, g])])
+            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
+            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
         end)
     end
 
     @production(MGE, YT[j=data["set_i"]], [t = 0, s = 1], begin
-        @output(PT[j],                          data["vtw"][j],         t)
-        @input(PD[j, r=data["set_r"]],          data["vst"][j, r],      s)
+        @output(PT[j],                          data["vtw"][j],             t)
+        @input(PD[j, r=data["set_r"]],          data["vst"][j, r],          s)
     end)
 
     @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = data["esubm"][i]], begin
-        @output(PM[i, r],                       data["vim"][i, r],      t)
-        @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],    s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
+        @output(PM[i, r],                       data["vim"][i, r],          t)
+        @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],        s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
     end)
 
     @production(MGE, X[i=data["set_i"], s=data["set_r"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PX[i, s, r], data["x0"][r, s, i],                       t)
-        @input(PD[i, s],                    data["wtflow0"][r, s, i],   s,    taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
-        @input(PT[j=data["set_i"]],         data["vtwr"][j, i, s, r],   s)
+        @output(PX[i, s, r], data["x0"][r, s, i],                           t)
+        @input(PD[i, s],                        data["wtflow0"][r, s, i],   s,    taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
+        @input(PT[j=data["set_i"]],             data["vtwr"][j, i, s, r],   s)
     end)
 
     @demand(MGE, RA[r=data["set_r"]], begin

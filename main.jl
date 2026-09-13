@@ -33,10 +33,9 @@ PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1
 # Uno_data(): Use the EPPA variable and parameter notations
 # Uno_data without () refers to the function object itself. The |> operator expects a function on its RHS, not a function call.
 
-Prepare_data() = Load_gtap_aggr() |> Load_satellite_data |> Uno_data 
+# Uno_data now has two inputs: data and Load_gtap_disa
+Prepare_data() = Load_gtap_aggr() |> Load_satellite_data |> data -> Uno_data(data, Load_gtap_disa()) 
 data = Prepare_data()
-
-disa = Load_gtap_disa()
 
 # MGE_model is defined in MGE.jl 
 MGE = EPPA_model(data, -1)
