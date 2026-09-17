@@ -500,6 +500,35 @@ for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_gne"]
     data["xm0a_n"][r, i, g] = data["xm0_n"][r, i, g]
 end
 
+# Add eind for i used by each disaggregated power sector in r
+
+data["einde"] = Dict(
+    (i, g, r) => disa["eind"][i, g, r]
+    for i ∈ disa["set_i"], g ∈ disa["set_v"], r ∈ disa["set_r"]
+)
+
+# :elec used by each disaggregated power sector in r
+data["eindea"] = Dict(
+    (i, g, r) => sum(data["einde"][j, g, r] for j ∈ disa["set_v"])
+    for i ∈ data["set_elec"], g ∈ disa["set_v"], r ∈ disa["set_r"]
+)
+
+# All inputs (including :elec) used by each disaggregated power sector in r
+data["eindea"] = merge(
+
+Dict((i, g, r) => data["einde"][i, g, r] for i ∈ data["set_note"], g ∈ data["set_v"], r ∈ data["set_r"]),
+Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_elec"], g ∈ data["set_v"], r ∈ data["set_r"])
+
+)
+
+# Replace g = :elec by g = the set of disaggregated power sector
+data["eind"] = merge(
+
+Dict((i, g, r) => data["eind"][i, g, r] for i ∈ data["set_i"], g ∈ data["set_note"], r ∈ data["set_r"]),
+Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_i"], g ∈ data["set_v"], r ∈ data["set_r"])
+
+)
+
 return data
 
 end
