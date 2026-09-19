@@ -11,7 +11,7 @@ function EPPACore(MGE, data, setting)
         tde[r=data["set_r"],    g=data["set_v"]],                   data["rto0e"][g, r],    (description = "Output tax or subsidy rates")
         tae[i=data["set_i"],    g=data["set_v"], r=data["set_r"]],  data["ta0e"][i, g, r],  (description = "Tax rate on Armington good")
         tfe[f=data["set_f"],    i=data["set_v"], r=data["set_r"]],  data["rtf0e"][f, i, r], (description = "Primary factor tax rates")
-
+        policy[r=data["set_r"]],                                    false,                  (description = "CO2 policy timing")
     end)
 
     @sectors(MGE, begin
@@ -52,6 +52,15 @@ function EPPACore(MGE, data, setting)
         RA[r=data["set_r"]],                                       (description = "Representative agent")
     end)
 
+    @auxiliaries(MGE, begin
+        CTAXR[i=data["set_i"], r=data["set_r"]],                   (description = "Carbon tax rate")
+        PC[r=data["set_r"]],                                       (description = "Carbon price index (USD/t-CO2)")
+        TCO2[r=data["set_r"]],                                     (description = "Total CO2 [billion t-CO2]")
+        GDP[r=data["set_r"]],                                      (description = "Real GDP")
+        TFP[r=data["set_r"]],                                      (description = "Total factor productivity")
+        GDPINDEX[r=data["set_r"]],                                 (description = "Real GDP index with base year normalizing to one")
+    end)
+
     @production(MGE, A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PA[i, r],                       data["xa0a"][r, i, g],      t)
         @input(PD[i, r],                        data["xd0a"][r, i, g],      s)
@@ -63,14 +72,9 @@ function EPPACore(MGE, data, setting)
         @input(PA[i, r],                        data["xa0a"][r, i, g],      s)
     end)
 
-    @production(MGE, EN[i=data["set_fnr"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PE[i, g, r],                    data["xa0a"][r, i, g],      t)
-        @input(PA[i, r],                        data["xa0a"][r, i, g],      s)
-    end)
-
-    @production(MGE, EN[i=data["set_roil"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 0], begin
+    @production(MGE, EN[i=data["set_fe"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 0], begin
         @output(PE[i, g, r],                    data["xa0a_c"][r, i, g],    t)
-        @input(PA[i, r],                        data["xa0a_c"][r, i, g],    s)
+        @input(PA[i, r],                        data["xa0a_c"][r, i, g],    s, taxes = [Tax(RA[r], CTAXR[i,r])])
     end)
 
     @production(MGE, D[g=data["set_note"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
@@ -196,6 +200,25 @@ function EPPACore(MGE, data, setting)
         @endowment(PS[f=data["set_lnd"], j=data["set_i"], r],   data["vfm"][f, j, r])
     end)
 
+    for i ∈ data["set_fe"], r ∈ data["set_r"]
+        if setting == 2 
+            @aux_constraint(MGE, CTAXR[i, r],  
+                PA[i, r]*sum(data["xa0a_c"][r, i, g] for g ∈ data["set_gnev"])*CTAXR[i, r]
+                - sum(data["eind"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*PC[r]*policy[r]
+            )
+#            @aux_constraint(MGE, PC[r],
+#                tco2[r]*rer[r] - TCO2[r]*policy[r]
+#            )
+        else
+            @aux_constraint(MGE, CTAXR[i,r],  
+                CTAXR[i, r] - 0.0
+            )
+            @aux_constraint(MGE, PC[r],
+                PC[r] - 0
+            )      
+        end   
+    end  
+    
     fix(PU[:USA], 1)
 
     return MGE

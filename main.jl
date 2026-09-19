@@ -19,6 +19,7 @@ Pkg.add([
 #Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
 #Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
 #Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
+#Pkg.update("GTAPdata")
 
 Pkg.instantiate()
 

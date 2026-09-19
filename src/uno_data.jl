@@ -15,6 +15,8 @@ data["set_serv"]    = [:serv]
 data["set_food"]    = [:food]
 data["set_eint"]    = [:eint]
 data["set_fnr"]     = setdiff(data["set_fe"], data["set_roil"])
+data["set_oil"]     = [:oil]
+data["set_cg"]      = setdiff(data["set_fnr"], data["set_oil"])
 data["set_nern"]    = union(data["set_ne"], data["set_roil"])
 data["set_dwe"]     = [:dwe]
 data["set_tran"]    = [:tran]
@@ -30,6 +32,15 @@ data["set_rest"]    = setdiff(data["set_ne"], union(data["set_serv"], data["set_
 
 data["set_br"]      = [:BRA]
 data["set_nbr"]     = setdiff(data["set_r"], data["set_br"])
+
+# Take all elements in disa["set_i"] that are not in data["set_i"]
+disa["set_v"]   = setdiff(disa["set_i"], data["set_i"])
+data["set_v"]   = disa["set_v"]
+data["set_gv"]  = data["set_g"] ∪ data["set_v"]
+data["vfme"]    = disa["vfm"]
+data["rto0e"]   = disa["rto0"]
+data["rtf0e"]   = disa["rtf0"]
+data["set_gnev"]= data["set_gne"] ∪ data["set_v"]
 
 #       EPPA parameters notation
 
@@ -242,28 +253,30 @@ Dict(
 
 # Combusted ratio of refined oil product p_c
 data["cr"]  = merge(
-
-Dict(
-    (i, g, r) => 0.9
-    for i ∈ data["set_roil"], g ∈ setdiff(data["set_g"], data["set_inv"]), r ∈ data["set_r"]
-),
-
-Dict(
-    (i, g, r) => 0.0
-    for i ∈ data["set_roil"], g ∈ data["set_inv"], r ∈ data["set_r"]
+Dict((i, g, r) => 1.0 for i ∈ data["set_cg"], g ∈ setdiff(data["set_g"], data["set_inv"]), r ∈ data["set_r"]),
+Dict((i, g, r) => 0.9 for i ∈ data["set_roil"], g ∈ setdiff(data["set_g"], data["set_inv"]), r ∈ data["set_r"]),
+Dict((i, g, r) => 0.0 for i ∈ data["set_oil"], g ∈ setdiff(data["set_g"], data["set_inv"]), r ∈ data["set_r"]),
+Dict((i, g, r) => 0.0 for i ∈ data["set_fe"], g ∈ data["set_inv"], r ∈ data["set_r"])
 )
+
+# Revise data["cr"] so that the use by each disaggregated power is considered 
+data["cr"] = merge(
+    Dict((i, g, r) => data["cr"][i, g, r] for i ∈ data["set_fe"], g ∈ data["set_gne"], r ∈ data["set_r"]),        
+    Dict((i, g, r) => 1.0 for i ∈ data["set_cg"], g ∈ disa["set_v"], r ∈ data["set_r"]),
+    Dict((i, g, r) => 0.9 for i ∈ data["set_roil"], g ∈ disa["set_v"], r ∈ data["set_r"]),
+    Dict((i, g, r) => 0.0 for i ∈ data["set_oil"], g ∈ disa["set_v"], r ∈ data["set_r"])
 )
 
 # Refined oil products combusted used by industry and final consumption 
 data["xa0_c"] = Dict(
     (r, i, j) => data["xa0"][r, i, j]*data["cr"][i, j, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"] 
 )
 
 # Refined oil products noncombusted used by industry and final consumption 
 data["xa0_n"] = Dict(
     (r, i, j) => data["xa0"][r, i, j]*(1-data["cr"][i, j, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"]
 )
 
 # Refined oil products combusted used by non-HHT private consumption
@@ -293,22 +306,22 @@ data["tfo_n"] = Dict(
 # Separate c and n parts of p_c's xd0 amd xm0
 data["xd0_c"] = Dict(
     (r, i, j) => data["xd0"][r, i, j]*data["cr"][i, j, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"] 
 )
 
 data["xd0_n"] = Dict(
     (r, i, j) => data["xd0"][r, i, j]*(1-data["cr"][i, j, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"]
 )
 
 data["xm0_c"] = Dict(
     (r, i, j) => data["xm0"][r, i, j]*data["cr"][i, j, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"] 
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"] 
 )
 
 data["xm0_n"] = Dict(
     (r, i, j) => data["xm0"][r, i, j]*(1-data["cr"][i, j, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_g"]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ data["set_gne"]
 )
 
 data["propfrac"] = Dict(
@@ -361,9 +374,6 @@ disa["xa0"] = Dict(
     for r ∈ disa["set_r"], i ∈ disa["set_i"], j ∈ disa["set_i"]
 )
 
-# Take all elements in disa["set_i"] that are not in data["set_i"]
-disa["set_v"]   = setdiff(disa["set_i"], data["set_i"])
-
 data["ta0e"] = merge(
 
 Dict(
@@ -401,14 +411,14 @@ Dict(
 
 # Refined oil products combusted used by industry and final consumption 
 data["xa0e_c"] = Dict(
-    (r, i, j) => data["xa0e"][r, i, j]*data["cr"][i, k, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xa0e"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"] 
 )
 
 # Refined oil products noncombusted used by industry and final consumption 
 data["xa0e_n"] = Dict(
-    (r, i, j) => data["xa0e"][r, i, j]*(1-data["cr"][i, k, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xa0e"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"]  
 )
 
 data["xd0e"] = merge(
@@ -426,14 +436,14 @@ Dict(
 
 # Refined oil products combusted used by industry and final consumption 
 data["xd0e_c"] = Dict(
-    (r, i, j) => data["xd0e"][r, i, j]*data["cr"][i, k, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xd0e"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"] 
 )
 
 # Refined oil products noncombusted used by industry and final consumption 
 data["xd0e_n"] = Dict(
-    (r, i, j) => data["xd0e"][r, i, j]*(1-data["cr"][i, k, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xd0e"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"] 
 )
 
 data["xm0e"] = merge(
@@ -451,23 +461,17 @@ Dict(
 
 # Refined oil products combusted used by industry and final consumption 
 data["xm0e_c"] = Dict(
-    (r, i, j) => data["xm0e"][r, i, j]*data["cr"][i, k, r]
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xm0e"][r, i, j]*data["cr"][i, j, r]
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"]
 )
 
 # Refined oil products noncombusted used by industry and final consumption 
 data["xm0e_n"] = Dict(
-    (r, i, j) => data["xm0e"][r, i, j]*(1-data["cr"][i, k, r])
-    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"], k ∈ data["set_elec"] 
+    (r, i, j) => data["xm0e"][r, i, j]*(1-data["cr"][i, j, r])
+    for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"]
 )
 
 
-data["set_v"]   = disa["set_v"]
-data["set_gv"]  = data["set_g"] ∪ data["set_v"]
-data["vfme"]    = disa["vfm"]
-data["rto0e"]   = disa["rto0"]
-data["rtf0e"]   = disa["rtf0"]
-data["set_gnev"]= data["set_gne"] ∪ data["set_v"]
 
 # xa0a data combine both set_v data and set_gne data
 data["xa0a"] = copy(data["xa0e"])
@@ -500,6 +504,12 @@ for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_gne"]
     data["xm0a_n"][r, i, g] = data["xm0_n"][r, i, g]
 end
 
+# Extend the notation of xa0a_c to also cover data["set_fnr"] in addition to data["set_roil"] for simplifying the produciton block
+data["xa0a_c"] = merge(
+Dict((r, i, g) => data["xa0a_c"][r, i, g] for r ∈ data["set_r"], i ∈ data["set_roil"], g ∈ data["set_gnev"]),
+Dict((r, i, g) => data["xa0a"][r, i, g] for r ∈ data["set_r"], i ∈ data["set_fnr"], g ∈ data["set_gnev"])
+)
+
 # Add eind for i used by each disaggregated power sector in r
 
 data["einde"] = Dict(
@@ -522,12 +532,22 @@ Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_elec"], g ∈ data
 )
 
 # Replace g = :elec by g = the set of disaggregated power sector
+
 data["eind"] = merge(
 
-Dict((i, g, r) => data["eind"][i, g, r] for i ∈ data["set_i"], g ∈ data["set_note"], r ∈ data["set_r"]),
+Dict((i, g, r) => data["eind"][i, g, r] for i ∈ data["set_i"], g ∈ data["set_gne"], r ∈ data["set_r"]),
 Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_i"], g ∈ data["set_v"], r ∈ data["set_r"])
 
 )
+
+#### Emissions ####
+
+# Benchmark total combusted CO2 emissions
+
+data["tco2"]   = Dict(
+        r => sum(data["epslon"][i]*data["cr"][(i, g, r)]*data["eind"][(i, g, r)] for i ∈ data["set_fe"], g ∈ data["set_gnev"])
+             for r ∈ data["set_r"]
+    )
 
 return data
 
