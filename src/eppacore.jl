@@ -11,6 +11,8 @@ function EPPACore(MGE, data, setting)
         tde[r=data["set_r"],    g=data["set_v"]],                   data["rto0e"][g, r],    (description = "Output tax or subsidy rates")
         tae[i=data["set_i"],    g=data["set_v"], r=data["set_r"]],  data["ta0e"][i, g, r],  (description = "Tax rate on Armington good")
         tfe[f=data["set_f"],    i=data["set_v"], r=data["set_r"]],  data["rtf0e"][f, i, r], (description = "Primary factor tax rates")
+        tco2[r=data["set_r"]],                                      data["tco2"][r],        (description = "Baseline total CO2")
+        rer[r=data["set_r"]],                                       1,                      (description = "Remaining emissions ratio")
         policy[r=data["set_r"]],                                    false,                  (description = "CO2 policy timing")
     end)
 
@@ -53,13 +55,18 @@ function EPPACore(MGE, data, setting)
     end)
 
     @auxiliaries(MGE, begin
-        CTAXR[i=data["set_i"], r=data["set_r"]],                   (description = "Carbon tax rate")
+        CTAXR[i=data["set_fe"], r=data["set_r"]],                  (description = "Carbon tax rate")
         PC[r=data["set_r"]],                                       (description = "Carbon price index (USD/t-CO2)")
         TCO2[r=data["set_r"]],                                     (description = "Total CO2 [billion t-CO2]")
-        GDP[r=data["set_r"]],                                      (description = "Real GDP")
-        TFP[r=data["set_r"]],                                      (description = "Total factor productivity")
-        GDPINDEX[r=data["set_r"]],                                 (description = "Real GDP index with base year normalizing to one")
+
+#        GDP[r=data["set_r"]],                                      (description = "Real GDP")
+#        TFP[r=data["set_r"]],                                      (description = "Total factor productivity")
+#        GDPINDEX[r=data["set_r"]],                                 (description = "Real GDP index with base year normalizing to one")
     end)
+
+    for r ∈ data["set_r"]
+        set_start_value(TCO2[r], data["tco2"][r])
+    end
 
     @production(MGE, A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
         @output(PA[i, r],                       data["xa0a"][r, i, g],      t)
@@ -200,15 +207,21 @@ function EPPACore(MGE, data, setting)
         @endowment(PS[f=data["set_lnd"], j=data["set_i"], r],   data["vfm"][f, j, r])
     end)
 
+    for i ∈ data["set_i"], r ∈ data["set_r"]
+        @aux_constraint(MGE, TCO2[r],
+                TCO2[r] - sum(data["epslon"][i]*data["eind"][(i, g, r)]*data["cr"][(i, g, r)]*EN[i, g, r] for i ∈ data["set_fe"], g ∈ data["set_gnev"])
+        )
+    end
+
     for i ∈ data["set_fe"], r ∈ data["set_r"]
         if setting == 2 
             @aux_constraint(MGE, CTAXR[i, r],  
                 PA[i, r]*sum(data["xa0a_c"][r, i, g] for g ∈ data["set_gnev"])*CTAXR[i, r]
-                - sum(data["eind"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*PC[r]*policy[r]
+                - sum(data["eind"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*data["cr"][i, g, r]*PC[r]*policy[r]
             )
-#            @aux_constraint(MGE, PC[r],
-#                tco2[r]*rer[r] - TCO2[r]*policy[r]
-#            )
+            @aux_constraint(MGE, PC[r],
+                tco2[r]*rer[r] - TCO2[r]*policy[r]
+            )
         else
             @aux_constraint(MGE, CTAXR[i,r],  
                 CTAXR[i, r] - 0.0
@@ -216,7 +229,7 @@ function EPPACore(MGE, data, setting)
             @aux_constraint(MGE, PC[r],
                 PC[r] - 0
             )      
-        end   
+        end
     end  
     
     fix(PU[:USA], 1)

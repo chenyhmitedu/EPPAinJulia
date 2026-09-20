@@ -544,10 +544,16 @@ Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_i"], g ∈ data["s
 
 # Benchmark total combusted CO2 emissions
 
-data["tco2"]   = Dict(
+data["fco2"]   = Dict(
         r => sum(data["epslon"][i]*data["cr"][(i, g, r)]*data["eind"][(i, g, r)] for i ∈ data["set_fe"], g ∈ data["set_gnev"])
-             for r ∈ data["set_r"]
+        for r ∈ data["set_r"]
     )
+
+data["tco2"]   = Dict(
+        r => data["fco2"][r] 
+        for r ∈ data["set_r"]
+    )
+
 
 return data
 
