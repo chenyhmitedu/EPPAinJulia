@@ -34,13 +34,15 @@ data["set_br"]      = [:BRA]
 data["set_nbr"]     = setdiff(data["set_r"], data["set_br"])
 
 # Take all elements in disa["set_i"] that are not in data["set_i"]
-disa["set_v"]   = setdiff(disa["set_i"], data["set_i"])
-data["set_v"]   = disa["set_v"]
-data["set_gv"]  = data["set_g"] ∪ data["set_v"]
-data["vfme"]    = disa["vfm"]
-data["rto0e"]   = disa["rto0"]
-data["rtf0e"]   = disa["rtf0"]
-data["set_gnev"]= data["set_gne"] ∪ data["set_v"]
+disa["set_v"]       = setdiff(disa["set_i"], data["set_i"])
+data["set_v"]       = disa["set_v"]
+data["set_gv"]      = data["set_g"] ∪ data["set_v"]
+data["vfme"]        = disa["vfm"]
+data["rto0e"]       = disa["rto0"]
+data["rtf0e"]       = disa["rtf0"]
+data["set_gnev"]    = data["set_gne"] ∪ data["set_v"]
+data["set_tele"]    = [:tele]
+data["set_vole"]    = setdiff(data["set_v"], data["set_tele"])
 
 #       EPPA parameters notation
 
