@@ -20,7 +20,7 @@ function EPPACore(MGE, data, setting)
         DL[i=data["set_v"], r=data["set_r"]],                      (description = "Disaggregated power supply")
         M[i=data["set_i"], r=data["set_r"]],                       (description = "Imports")
         YT[i=data["set_i"]],                                       (description = "Transportation services")
-        X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Subsidy and transport service included exports")
+        X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Exports: Subsidy and transport service included")
         A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]],   (description = "Armington good: nonenergy and noncombusted p_c")
         EN[i=data["set_e"], g=data["set_gnev"], r=data["set_r"]],  (description = "Armington good: energy goods including all combusted and elec")
         Z[r=data["set_r"]],                                        (description = "Aggregate private consumption")
@@ -58,6 +58,9 @@ function EPPACore(MGE, data, setting)
         CTAXR[i=data["set_fe"], r=data["set_r"]],                  (description = "Carbon tax rate")
         PC[r=data["set_r"]],                                       (description = "Carbon price index (USD/t-CO2)")
         TCO2[r=data["set_r"]],                                     (description = "Total CO2 [billion t-CO2]")
+        GDP[r=data["set_r"]],                                      (description = "Real GDP")
+        TFP[r=data["set_r"]],                                      (description = "Total factor productivity")
+        GDPINDEX[r=data["set_r"]],                                 (description = "Real GDP index with base year normalizing to one")
     end)
 
     for r ∈ data["set_r"]
@@ -187,13 +190,15 @@ function EPPACore(MGE, data, setting)
         @input(PD[j, r=data["set_r"]],          data["vst"][j, r],          s)
     end)
 
+    # Imports for region r
     @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = 5], begin
         @output(PM[i, r],                       data["vim"][i, r],          t)
-        @input(PX[i, s=data["set_r"], r],       data["x0"][r, s, i],        s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
+        @input(PX[i, s=data["set_r"], r],       data["x0"][s, r, i],        s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
     end)
 
+    # Exports for region s
     @production(MGE, X[i=data["set_i"], s=data["set_r"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PX[i, s, r], data["x0"][r, s, i],                           t)
+        @output(PX[i, s, r], data["x0"][s, r, i],                           t)
         @input(PD[i, s],                        data["wtflow0"][r, s, i],   s,    taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
         @input(PT[j=data["set_i"]],             data["vtwr"][j, i, s, r],   s)
     end)
@@ -238,7 +243,14 @@ function EPPACore(MGE, data, setting)
             @aux_constraint(MGE, PC[r], PC[r] - 0)
         end
     end
-
+#=
+    @aux_constraint(MGE, GDP[r],
+        GDP[r]  - PW[r]*data["w0"][r]*W[r] 
+                - data["g0"][r]*PG[r]
+                - sum(data["x0"][r, s, i]*PX[i, r, s]*X[i, r, s] for i ∈ data["set_i"], s ∈ data["set_r"]) 
+                + sum(data["x0"][s, r, i]*PM[i, r]*M[i, r] for i ∈ data["set_i"], s ∈ data["set_r"]) 
+    )
+=#
     fix(PU[:USA], 1)
 
     return MGE

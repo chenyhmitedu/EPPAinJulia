@@ -81,7 +81,7 @@ data["wtflow0"] = Dict(
 
 # Transport margin and export subsidy inclusive export
 data["x0"] = Dict(
-    (r, s, i) => data["vxmd"][i, s, r]*(1 - data["rtxs0"][i, s, r]) + sum(data["vtwr"][j, i, s, r] for j ∈ data["set_tr"])
+    (s, r, i) => data["vxmd"][i, s, r]*(1 - data["rtxs0"][i, s, r]) + sum(data["vtwr"][j, i, s, r] for j ∈ data["set_tr"])
     for r ∈ data["set_r"], s ∈ data["set_r"], i ∈ data["set_i"]
 )
 
