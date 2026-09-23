@@ -62,6 +62,7 @@ function EPPACore(MGE, data, setting)
 
     for r ∈ data["set_r"]
         set_start_value(TCO2[r], data["tco2"][r])
+        set_lower_bound(MGE[:PC][r], 0.0)
     end
 
     @production(MGE, A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
@@ -96,7 +97,7 @@ function EPPACore(MGE, data, setting)
 
     # The only way to use the same D[i, r] for data["set_note"] and data["set_elec"] is to use the for loop rather than using D[i=data[...], r=data[...]]
     for i ∈ data["set_elec"], r ∈ data["set_r"]
-        @production(MGE, D[i, r], [t = 0, s = 0, s1 => s = 3], begin
+        @production(MGE, D[i, r], [t = 0, s = 0, s1 => s = 5], begin
             @output(PD[i, r],                       data["xp0"][r, i],          t)
             @input(PL[:tele, r],                    data["xp0e"][r, :tele],     s)
             @input(PL[g=data["set_vole"], r],       data["xp0e"][r, g],         s)
@@ -223,7 +224,7 @@ function EPPACore(MGE, data, setting)
         if setting == 2
             @aux_constraint(MGE, CTAXR[i, r],
                 PA[i, r]*sum(data["xa0a_c"][r, i, g] for g ∈ data["set_gnev"])*CTAXR[i, r]
-                - sum(data["eind"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*data["cr"][i, g, r]*PC[r]*policy[r]
+                - sum(data["eind"][i, g, r]*data["cr"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*PC[r]*policy[r]
             )
         else
             @aux_constraint(MGE, CTAXR[i,r], CTAXR[i, r] - 0.0)

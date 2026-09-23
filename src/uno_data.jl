@@ -1,6 +1,6 @@
 function Uno_data(data::Dict, disa::Dict)
 
-#       Model specific sets
+#### 1.0 Model specific sets ####
 
 # Vectors below may be changed depending on the sectoral names and resolution
 data["set_fe"]      = [:coa, :gas, :p_c, :oil]
@@ -37,14 +37,12 @@ data["set_nbr"]     = setdiff(data["set_r"], data["set_br"])
 disa["set_v"]       = setdiff(disa["set_i"], data["set_i"])
 data["set_v"]       = disa["set_v"]
 data["set_gv"]      = data["set_g"] ∪ data["set_v"]
-data["vfme"]        = disa["vfm"]
-data["rto0e"]       = disa["rto0"]
-data["rtf0e"]       = disa["rtf0"]
+
 data["set_gnev"]    = data["set_gne"] ∪ data["set_v"]
 data["set_tele"]    = [:tele]
 data["set_vole"]    = setdiff(data["set_v"], data["set_tele"])
 
-#       EPPA parameters notation
+#### 2.0 Key EPPA parameters ####
 
 # xdp0(r,i,j)	= vdfm(i,j,r);
 data["xd0"] = Dict(
@@ -111,7 +109,7 @@ data["inv0"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_inv"]
 )
 
-#       Household transportation
+#### 3.0 Household transportation ####
 
 # owntrn(r)        = es(r)*cons0(r); es(r) = own-supply expenditure share
 data["owntrn"] = Dict(
@@ -351,7 +349,11 @@ data["w0"] = Dict(
     for r ∈ data["set_r"]
 )
 
-#### Disaggregated power sectors ####
+#### 4.0 Disaggregated power sectors ####
+
+data["vfme"]        = disa["vfm"]
+data["rto0e"]       = disa["rto0"]
+data["rtf0e"]       = disa["rtf0"]
 
 # xp0(r,i)	= vom(i,r);
 disa["xp0"] = Dict(
@@ -473,8 +475,6 @@ data["xm0e_n"] = Dict(
     for r ∈ data["set_r"], i ∈ data["set_roil"], j ∈ disa["set_v"]
 )
 
-
-
 # xa0a data combine both set_v data and set_gne data
 data["xa0a"] = copy(data["xa0e"])
 data["xd0a"] = copy(data["xd0e"])
@@ -542,7 +542,7 @@ Dict((i, g, r) => data["eindea"][i, g, r] for i ∈ data["set_i"], g ∈ data["s
 
 )
 
-#### Emissions ####
+#### 5.0 Emissions ####
 
 # Benchmark total combusted CO2 emissions
 
