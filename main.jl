@@ -16,7 +16,7 @@ Pkg.add([
 =#
 
 #Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
-#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
+Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
 #Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
 #Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
 #Pkg.update("GTAPdata")
@@ -42,6 +42,41 @@ data = Prepare_data()
 MGE = EPPA_model(data, -1)
 solve!(MGE, cumulative_iteration_limit = 0)
 
+# Include the case file
+
+# ARGS: a built-in Julia global variable that holds the command-line arguments passed to the Julia program when it is started.
+# For example, in the command prompt (not Julian mode), when we type julia main.jl, length(ARGS) = 0, and so refcalib is run.
+# When we type julia main.jl ref.jl, length(ARGS) != 0, and filename = AGRS[1].
+
+# Counterfactual simulation
+# counterfactual    = false 
+
+if length(ARGS) == 0
+    filename = "refcalib.jl"
+    #filename = "ref.jl"
+    #filename = "cpqs.jl"
+else
+    filename = ARGS[1]
+end
+
+case = joinpath(@__DIR__, "src/active/", filename)
+include(case)
+
+data["pr_t"] = Dict(
+                    (t, r) => (data["popa_eppa"][t+5, r]/data["popa_eppa"][t, r]) - 1
+                    for t ∈ years, r ∈ data["set_r"]
+                    )
+
+data["gr_t"] = Dict(
+                    (t, r) => data["argdpgrrate"][t, r]
+                    for t ∈ years, r ∈ data["set_r"]
+                    )
+
+results = Recursive(data, setting)
+
+
+
+#=
 #for i ∈ [:p_c, :coa, :gas], g ∈ data["set_g"], r ∈ [:USA]
 #    set_value!(MGE[:ta][i, g, r], 0.05)
 #end
@@ -91,3 +126,5 @@ df = generate_report(MGE)
 dff = df[df.margin .> 1e-6, :]
 println(dff)
 #println(df)
+=#
+

@@ -16,7 +16,7 @@ XLSX = "fdbf4ff8-1666-58a4-91e7-1b58723a45e0"
 
 [sources]
 CSVtoDIC = {rev = "master", url = "https://github.com/chenyhmitedu/CSVtoDIC"}
-GTAPdata = {rev = "master", url = "https://github.com/chenyhmitedu/GTAPdata"}
+GTAPdata = {path = "D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata"}
 
 [compat]
 CSV = "0.10.16"

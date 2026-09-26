@@ -556,6 +556,12 @@ data["tco2"]   = Dict(
         for r ∈ data["set_r"]
     )
 
+#### 6.0 Macroeconomics
+
+data["gdp0"] = Dict(
+    r => data["w0"][r] + data["g0"][r] + sum(data["x0"][r, s, i] - data["x0"][s, r, i] for s ∈ data["set_r"], i ∈ data["set_i"])
+    for r ∈ data["set_r"]
+)
 
 return data
 

@@ -10,9 +10,12 @@ function EPPACore(MGE, data, setting)
         tde[r=data["set_r"],    g=data["set_v"]],                   data["rto0e"][g, r],    (description = "Output tax or subsidy rates")
         tae[i=data["set_i"],    g=data["set_v"], r=data["set_r"]],  data["ta0e"][i, g, r],  (description = "Tax rate on Armington good")
         tfe[f=data["set_f"],    i=data["set_v"], r=data["set_r"]],  data["rtf0e"][f, i, r], (description = "Primary factor tax rates")
+        tfp[r=data["set_r"]],                                       1,                      (description = "Total factor productivity")
+        gdp[r=data["set_r"]],                                       data["gdp0"][r],        (description = "Real GDP")
         tco2[r=data["set_r"]],                                      data["tco2"][r],        (description = "Baseline total CO2")
         rer[r=data["set_r"]],                                       1,                      (description = "Remaining emissions ratio")
         policy[r=data["set_r"]],                                    false,                  (description = "CO2 policy timing")
+        evom[f=data["set_mf"], r=data["set_r"]],                    data["evom"][f, r],     (description = "Return to mobile endowment")
     end)
 
     @sectors(MGE, begin
@@ -65,7 +68,16 @@ function EPPACore(MGE, data, setting)
 
     for r ∈ data["set_r"]
         set_start_value(TCO2[r], data["tco2"][r])
+        set_start_value(GDP[r], data["gdp0"][r])
+        set_start_value(GDPINDEX[r], 1)
+        set_start_value(TFP[r], 1)
         set_lower_bound(MGE[:PC][r], 0.0)
+        set_lower_bound(MGE[:GDP][r], 0.0)
+        set_lower_bound(MGE[:GDPINDEX][r], 0.0)
+        set_lower_bound(MGE[:TFP][r], 0.0)
+        for f ∈ data["set_mf"]
+            set_lower_bound(MGE[:PF][f, r], 0.0)
+        end
     end
 
     @production(MGE, A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
@@ -211,9 +223,9 @@ function EPPACore(MGE, data, setting)
 
     @demand(MGE, RA[r=data["set_r"]], begin
         @final_demand(PW[r],                                    data["w0"][r])
-        @endowment(PU[:USA],                                    data["vb"][r])
-        @endowment(PG[r],                                      -data["g0"][r])
-        @endowment(PF[f=data["set_mf"], r],                     data["evom"][f, r])
+        @endowment(PU[:USA],                                    data["vb"][r]*GDPINDEX[r])
+        @endowment(PG[r],                                      -data["g0"][r]*GDPINDEX[r])
+        @endowment(PF[f=data["set_mf"], r],                     evom[f, r]*TFP[r])
         @endowment(PS[f=data["set_fix"], j=data["set_i"], r],   data["vfm"][f, j, r])
         @endowment(PS[f=data["set_lnd"], j=data["set_i"], r],   data["vfm"][f, j, r])
     end)
@@ -243,14 +255,35 @@ function EPPACore(MGE, data, setting)
             @aux_constraint(MGE, PC[r], PC[r] - 0)
         end
     end
-#=
-    @aux_constraint(MGE, GDP[r],
-        GDP[r]  - PW[r]*data["w0"][r]*W[r] 
-                - data["g0"][r]*PG[r]
-                - sum(data["x0"][r, s, i]*PX[i, r, s]*X[i, r, s] for i ∈ data["set_i"], s ∈ data["set_r"]) 
-                + sum(data["x0"][s, r, i]*PM[i, r]*M[i, r] for i ∈ data["set_i"], s ∈ data["set_r"]) 
-    )
-=#
+
+    for r ∈ data["set_r"]
+        @aux_constraint(MGE, GDP[r],
+            GDP[r]  - PW[r]*data["w0"][r]*W[r] 
+                    - data["g0"][r]*PG[r]*GDPINDEX[r]
+                    - sum(data["x0"][r, s, i]*PX[i, r, s]*X[i, r, s] for i ∈ data["set_i"], s ∈ data["set_r"])
+                    + sum(data["x0"][s, r, i]*PM[i, r]*M[i, r] for i ∈ data["set_i"], s ∈ data["set_r"])
+        )
+    end
+
+    for r ∈ data["set_r"]
+        @aux_constraint(MGE, GDPINDEX[r],
+               GDP[r]/data["gdp0"][r] - GDPINDEX[r]
+        )
+    end
+
+    # -1 is for benchmark calibration check
+    for r ∈ data["set_r"]
+        if setting == 0 || setting == -1
+            @aux_constraint(MGE, TFP[r],
+                GDP[r]  - gdp[r]
+            )
+        else
+            @aux_constraint(MGE, TFP[r],
+                TFP[r] - tfp[r]            
+            )
+        end
+    end
+
     fix(PU[:USA], 1)
 
     return MGE

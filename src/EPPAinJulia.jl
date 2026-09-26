@@ -4,6 +4,7 @@ module EPPAinJulia
     using JLD2
     using MPSGE
     using GTAPdata
+    using JuMP
 
     include("load_data.jl")
     export Load_gtap_aggr
@@ -15,6 +16,9 @@ module EPPAinJulia
 
     include("eppacore.jl")
     export EPPACore
+
+    include("recursive.jl")
+    export Recursive
 
     include("eppa_model.jl")
     export EPPA_model
