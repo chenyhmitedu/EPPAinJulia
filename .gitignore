@@ -3,5 +3,6 @@ Manifest.toml
 
 # Model data
 /src/*.jld2
+/src/data/*.jld2
 /src/data/gtap/*/*.csv
 

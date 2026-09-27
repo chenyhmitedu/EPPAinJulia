@@ -74,8 +74,6 @@ data["gr_t"] = Dict(
 
 results = Recursive(data, setting)
 
-
-
 #=
 #for i ∈ [:p_c, :coa, :gas], g ∈ data["set_g"], r ∈ [:USA]
 #    set_value!(MGE[:ta][i, g, r], 0.05)
