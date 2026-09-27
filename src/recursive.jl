@@ -1,26 +1,34 @@
 function save_point(m, path)
-     jm = jump_model(m)
-     levels = Dict{String,Float64}()
-     for v in all_variables(jm)
-         n = JuMP.name(v)
-         isempty(n) && continue
-         levels[n] = JuMP.value(v)
-     end
-     JLD2.jldsave(path; levels)
-     return path
+
+jm = jump_model(m)                          # Get the underlying JuMP model where variables live
+levels = Dict{String,Float64}()             # Empty dictionary: variable name → last solved level
+
+    for v in all_variables(jm)              # Loop over every JuMP variable in the MCP
+       n = JuMP.name(v)                     # JuMP.name(v) returns that variable’s string name in the JuMP model
+       isempty(n) && continue               # Skip unnamed variables; the short form of "if isempty(n) continue end"
+       levels[n] = JuMP.value(v)            # Store the current solution. Requires a completed solve!
+    end 
+
+    JLD2.jldsave(path; levels)              # Write the dict to disk under the key "levels"
+    return path
+
 end
 
-function load_point!(m, path)
-    levels = JLD2.load(path, "levels")
-    jm = jump_model(m)
+function load_point!(m, path)               # Load a saved point into model m from file path. The ! means m is modified in place
+
+    levels  = JLD2.load(path, "levels")     # Read the dict that save_point wrote (name => last level). Same keys as JuMP.name(v)
+    jm      = jump_model(m)
+
     for v in all_variables(jm)
-        n = JuMP.name(v)
-        haskey(levels, n) || continue
-        JuMP.set_start_value(v, levels[n])
+        n   = JuMP.name(v)
+        haskey(levels, n) || continue       # Skip if this name was not in .jld2, otherwise do the next line. Same as if !haskey(levels, n); continue; end
+        JuMP.set_start_value(v, levels[n])   
     end
-    MPSGE.update_internal_start_values!(m)
+
+    MPSGE.update_internal_start_values!(m)  # ucf(...) starts are recomputed from those prices
     #JuMP.set_start_values(jm)
     return nothing
+
 end
 
 function Recursive(data::Dict, setting::Int64)
