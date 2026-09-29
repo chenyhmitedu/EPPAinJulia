@@ -33,7 +33,7 @@ end
 
 function Recursive(data::Dict, setting::Int64)
 
-    tp      = collect(2025:5:2100)
+    tp      = union([2023], collect(2025:5:2100))
     tfp     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])  
     gdp     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
     inv     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
@@ -45,8 +45,9 @@ function Recursive(data::Dict, setting::Int64)
 
     MGE = EPPA_model(data, setting)
 
-    for t ∈ tp
+    for i in 1:length(tp)
 
+        t = tp[i]
         if t == tp[1]
             for r ∈ data["set_r"]
                 ken[t, r] = value(MGE[:evom][:cap, r])
@@ -55,11 +56,11 @@ function Recursive(data::Dict, setting::Int64)
         end
 
         if t > tp[1]
- 
+            tint = tp[i] - tp[i-1] 
             for r ∈ data["set_r"]
                 #ken[t, r] = ken[t-5, r]*(1-data["dpr"])^5 + data["ror"]*data["vom"][:i, r]*inv[t-5, r]*5
-                ken[t, r] = ken[t-5, r]*(1-data["dpr"])^5 + data["ror"]*data["vom"][:i, r]*inv[t-5, r] * (1 - (1-data["dpr"])^5) / data["dpr"]
-                len[t, r] = len[t-5, r]*(1+data["pr_t"][t-5, r])
+                ken[t, r] = ken[t-tint, r]*(1-data["dpr"])^tint + data["ror"]*data["vom"][:i, r]*inv[t-tint, r] * (1 - (1-data["dpr"])^tint) / data["dpr"]
+                len[t, r] = len[t-tint, r]*(1+data["pr_t"][t-tint, r])
 
                 set_value!(MGE[:evom][:cap, r], ken[t, r])
                 set_value!(MGE[:evom][:lab, r], len[t, r])
@@ -67,21 +68,36 @@ function Recursive(data::Dict, setting::Int64)
             
         end
 
-        p = joinpath(@__DIR__, "data", "ref_$(t).jld2")
+        p = joinpath(@__DIR__, "data/savepoints", "ref_$(t).jld2")
 
         if isfile(p)
             load_point!(MGE, p)
         end
 
-        solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 1e-4)
-        
+        solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 5e-4)
+        st[t] = termination_status(MGE.jump_model)
+   
+        if st[t] == MOI.LOCALLY_SOLVED || st[t] == MOI.OPTIMAL
+            # Do nothing
+        else
+            solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 5e-3)
+            st[t] = termination_status(MGE.jump_model)
+
+            if st[t] == MOI.LOCALLY_SOLVED || st[t] == MOI.OPTIMAL
+            # Do nothing
+            else
+                solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 1e-2)
+                st[t] = termination_status(MGE.jump_model)
+            end
+        end
+
         for r ∈ data["set_r"]
             tfp[t, r]   = value(MGE[:TFP][r])
             gdp[t, r]   = value(MGE[:GDP][r])
             inv[t, r]   = value(MGE[:INV][r])
             gindex[t, r] = value(MGE[:GDPINDEX][r])
             tco2[t, r]  = value(MGE[:TCO2][r])
-            st[t] = termination_status(MGE.jump_model)
+            #st[t] = termination_status(MGE.jump_model)
         end
         
         save_point(MGE, p)

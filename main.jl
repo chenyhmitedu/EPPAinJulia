@@ -21,11 +21,19 @@ Pkg.add([
 #Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
 #Pkg.update("GTAPdata")
 
+#Pkg.add("DataFrames")
+#Pkg.add("XLSX")
+#Pkg.add("Tables")
+
 Pkg.instantiate()
 
 using EPPAinJulia
 using JuMP
 using MPSGE
+
+using DataFrames
+using XLSX
+using Tables
 
 import PATHSolver
 PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0")
@@ -62,10 +70,16 @@ end
 case = joinpath(@__DIR__, "src/active/", filename)
 include(case)
 
-data["pr_t"] = Dict(
+data["pr_t"] = merge(
+    Dict(
+                    (t, r) => (data["popa_eppa"][t + (years[2]-years[1]), r]/data["popa_eppa"][t, r]) - 1
+                    for t ∈ [years[1]], r ∈ data["set_r"]
+                    ),
+    Dict(
                     (t, r) => (data["popa_eppa"][t+5, r]/data["popa_eppa"][t, r]) - 1
-                    for t ∈ years, r ∈ data["set_r"]
-                    )
+                    for t ∈ setdiff(years, years[1]), r ∈ data["set_r"]
+                    ),
+)
 
 data["gr_t"] = Dict(
                     (t, r) => data["argdpgrrate"][t, r]
@@ -80,5 +94,45 @@ dff = df[df.margin .> 1e-6, :]
 println(dff)
 println(df)
 =#
+
+# Output
+
+names = [:gdp, :len, :ken, :st]
+d = Dict{Symbol, Dict}()
+
+for (i, name) in enumerate(names)
+    d[name] = results[i]
+end
+
+# To avoid including .jl as an EXCEL file name
+fn = chop(filename, tail=3)
+pt = "./src/results/results_$(fn).xlsx"
+
+function dicts_to_xlsx(d::Dict, path::AbstractString)
+    XLSX.openxlsx(path, mode="w") do xf
+        first_sheet = true
+        for name in names         # sheet order
+            inner = d[name]
+            df = DataFrame(
+                t     = first.(keys(inner)),
+                r     = string.(last.(keys(inner))),
+                value = collect(values(inner)),
+            )
+            sort!(df, [:t, :r])
+
+            if first_sheet
+                XLSX.rename!(xf[1], string(name))
+                first_sheet = false
+            else
+                XLSX.addsheet!(xf, string(name))
+            end
+            XLSX.writetable!(xf[string(name)], df)
+        end
+    end
+end
+
+dicts_to_xlsx(d, pt)
+
+
 
 
