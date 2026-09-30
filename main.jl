@@ -86,6 +86,13 @@ data["gr_t"] = Dict(
                     for t ∈ years, r ∈ data["set_r"]
                     )
 
+# To avoid including .jl as an EXCEL file name
+fn = chop(filename, tail=3)
+pt = "./src/results/results_$(fn).xlsx"
+
+data["filename"]    = fn
+data["tp"]          = years
+
 results = Recursive(data, setting)
 
 #=
@@ -103,10 +110,6 @@ d = Dict{Symbol, Dict}()
 for (i, name) in enumerate(names)
     d[name] = results[i]
 end
-
-# To avoid including .jl as an EXCEL file name
-fn = chop(filename, tail=3)
-pt = "./src/results/results_$(fn).xlsx"
 
 function dicts_to_xlsx(d::Dict, path::AbstractString)
     XLSX.openxlsx(path, mode="w") do xf

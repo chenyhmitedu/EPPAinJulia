@@ -33,7 +33,7 @@ end
 
 function Recursive(data::Dict, setting::Int64)
 
-    tp      = union([2023], collect(2025:5:2100))
+    tp      = data["tp"]     # Set in the case file 
     tfp     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])  
     gdp     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
     inv     = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
@@ -68,7 +68,8 @@ function Recursive(data::Dict, setting::Int64)
             
         end
 
-        p = joinpath(@__DIR__, "data/savepoints", "ref_$(t).jld2")
+        fn = data["filename"]
+        p = joinpath(@__DIR__, "data/savepoints", "$(fn)_$(t).jld2")
 
         if isfile(p)
             load_point!(MGE, p)

@@ -1,5 +1,5 @@
 # Reference calibration
-setting    = 0    # (0 = GDP exogenous; others = GDP endogenous)
+setting    = 1    # (0 = GDP exogenous; others = GDP endogenous)
 
 # Population and GDP growth
 
