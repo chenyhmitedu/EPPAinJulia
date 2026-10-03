@@ -59,7 +59,7 @@ function Recursive(data::Dict, setting::Int64)
             tint = tp[i] - tp[i-1] 
             for r ∈ data["set_r"]
                 #ken[t, r] = ken[t-5, r]*(1-data["dpr"])^5 + data["ror"]*data["vom"][:i, r]*inv[t-5, r]*5
-                ken[t, r] = ken[t-tint, r]*(1-data["dpr"])^tint + data["ror"]*data["vom"][:i, r]*inv[t-tint, r] * (1 - (1-data["dpr"])^tint) / data["dpr"]
+                ken[t, r] = ken[t-tint, r]*(1-data["dpr"])^tint + data["ror"]*data["inv0"][r]*inv[t-tint, r] * (1 - (1-data["dpr"])^tint) / data["dpr"]
                 len[t, r] = len[t-tint, r]*(1+data["pr_t"][t-tint, r])
 
                 set_value!(MGE[:evom][:cap, r], ken[t, r])
