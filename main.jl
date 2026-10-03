@@ -104,7 +104,7 @@ println(df)
 
 # Output
 
-names = [:gdp, :len, :ken, :st]
+names = [:gdp, :len, :ken, :st, :gdptar]
 d = Dict{Symbol, Dict}()
 
 for (i, name) in enumerate(names)

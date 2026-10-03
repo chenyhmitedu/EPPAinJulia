@@ -42,6 +42,8 @@ function Recursive(data::Dict, setting::Int64)
     gindex  = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
     tco2    = Dict{Tuple{Int,Symbol}, Float64}((t, r) => 0.0 for t ∈ tp, r ∈ data["set_r"])
     st      = Dict{Int, Enum}()
+    gdptar  = Dict{Tuple{Int64, Symbol}, Float64}() 
+
 
     MGE = EPPA_model(data, setting)
 
@@ -51,7 +53,8 @@ function Recursive(data::Dict, setting::Int64)
         if t == tp[1]
             for r ∈ data["set_r"]
                 ken[t, r] = value(MGE[:evom][:cap, r])
-                len[t, r] = value(MGE[:evom][:lab, r]) 
+                len[t, r] = value(MGE[:evom][:lab, r])
+                gdptar[t, r] = data["gdp0"][r] 
             end
         end
 
@@ -61,9 +64,11 @@ function Recursive(data::Dict, setting::Int64)
                 #ken[t, r] = ken[t-5, r]*(1-data["dpr"])^5 + data["ror"]*data["vom"][:i, r]*inv[t-5, r]*5
                 ken[t, r] = ken[t-tint, r]*(1-data["dpr"])^tint + data["ror"]*data["inv0"][r]*inv[t-tint, r] * (1 - (1-data["dpr"])^tint) / data["dpr"]
                 len[t, r] = len[t-tint, r]*(1+data["pr_t"][t-tint, r])
+                gdptar[t, r] = gdptar[t-tint, r] * (1+data["gr_t"][t-tint, r])^(tint)
 
                 set_value!(MGE[:evom][:cap, r], ken[t, r])
                 set_value!(MGE[:evom][:lab, r], len[t, r])
+                set_value!(MGE[:gdp][r], gdptar[t, r])
             end  
             
         end
@@ -107,5 +112,5 @@ function Recursive(data::Dict, setting::Int64)
 
     end
 
-    return gdp, len, ken, st
+    return gdp, len, ken, st, gdptar
 end
