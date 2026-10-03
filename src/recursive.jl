@@ -81,12 +81,33 @@ function Recursive(data::Dict, setting::Int64)
         end
 
         solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 5e-4)
+
+        if has_values(jump_model(MGE))
+            set_start_values(jump_model(MGE))          # start := value, for every JuMP variable
+            MPSGE.update_internal_start_values!(MGE)   # nest unit-cost starts
+        end
+
         st[t] = termination_status(MGE.jump_model)
    
         if st[t] == MOI.LOCALLY_SOLVED || st[t] == MOI.OPTIMAL
             # Do nothing
         else
             solve!(MGE, cumulative_iteration_limit = 10000, convergence_tolerance = 5e-3)
+
+            if has_values(jump_model(MGE))
+                set_start_values(jump_model(MGE))          # start := value, for every JuMP variable
+                MPSGE.update_internal_start_values!(MGE)   # nest unit-cost starts
+            end
+
+            #=
+            For the code above, if the solve doesn't yield an optimal solution when the iterlim is achieved, will the if has_values... be excecuted?
+            Grok's answer: Yes, if PATH handed a point back. has_values does not mean optimal. It means JuMP stored a primal result. On an iteration limit, PATH 
+            still returns its last (or best) $x$. PATHSolver normally stores that vector, with status ITERATION_LIMIT or LOCALLY_INFEASIBLE, not LOCALLY_SOLVED. 
+            Then has_values is true and the if runs, so the next solve starts from that point rather than from the original 1s. It is skipped only when 
+            there is no result (result_count == 0): a crash, a license error, or a status JuMP treats as empty. Then value would throw OptimizeNotCalled 
+            and the old starts stay in place.
+            =#
+
             st[t] = termination_status(MGE.jump_model)
 
             if st[t] == MOI.LOCALLY_SOLVED || st[t] == MOI.OPTIMAL
