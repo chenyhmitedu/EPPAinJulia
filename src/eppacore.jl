@@ -275,8 +275,8 @@ function EPPACore(MGE, data, setting)
     for r ∈ data["set_r"]
         if setting == 0 || setting == -1
             @aux_constraint(MGE, TFP[r],
-                #GDP[r]  - gdp[r]
-                TFP[r] - tfp[r]
+                GDP[r]  - gdp[r]
+                #TFP[r] - tfp[r]
             )
         else
             @aux_constraint(MGE, TFP[r],
