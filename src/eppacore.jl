@@ -3,23 +3,25 @@
 # welfare, and the gprod/rgdp closure. No vintage, backstops, land use,
 # Stone-Geary, or emissions commodities.
 
-function build_model(B)
+function build_model(B; simu::Integer = 0)
     # New methods are invisible to this call frame. Rebuild in the latest world.
     apply_smooth!()
-    return Base.invokelatest(_build_model, B)
+    return Base.invokelatest(_build_model, B, Int(simu))
 end
 
 # iter = -1 is the base year, before any endowment update.
 # solve!(MGE, cumulative_iteration_limit = 0) then reports the benchmark residual.
-function EPPA_model(data, iter::Integer = -1)
+function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
     iter == -1 || throw(ArgumentError(
-        "EPPA_model(data, -1) is the base-year model. Later years are solved by calibrate.",
+        "EPPA_model(data, -1) is the base-year model. Later years are solved by recursive.",
     ))
-    MGE, _ = build_model(data)
+    bau = simu == 1 ? _load_bau() : nothing
+    MGE, st = build_model(data; simu)
+    simu == 1 && _install_gprod!(st, bau, YEARS[1])
     return MGE
 end
 
-function _build_model(B)
+function _build_model(B, simu::Integer = 0)
     PATHSolver.c_api_License_SetString(PATH_LICENSE)
     MGE = MPSGEModel()
     R = REGIONS
@@ -49,6 +51,12 @@ function _build_model(B)
     @parameter(MGE, SAV[r=R], g("savf0", (r,)))
     @parameter(MGE, GRG[r=R], B.g0[r])
     @parameter(MGE, GDP0[r=R], B.rgdp0[r])
+    # Calibrated productivity for simu = 1. Unused while simu = 0.
+    gp0 = nothing
+    if simu == 1
+        @parameter(MGE, GP0[r=R], 1.0)
+        gp0 = GP0
+    end
 
     @commodity(MGE, PD[i=I, r=R])
     @commodity(MGE, PA[i=I, r=R])
@@ -514,11 +522,16 @@ function _build_model(B)
         hm = B.homm0[r] > 0 ? PWH * B.homm0[r] * MQ[r] : 0
         @aux_constraint(MGE, rgdp[r],
             PU[r] * rgdp[r] - (PU[r] * g("cons0", (r,)) * Z[r] + B.inv0[r] * PINV[r] * INV[r] + B.g0[r] * PG[r] * GOVT[r] + ex - im + hx - hm))
-        @aux_constraint(MGE, gprod[r], rgdp[r] - GDP0[r])
+        # simu = 0: gprod meets the GDP target. simu = 1: gprod is the calibrated value.
+        if simu == 0
+            @aux_constraint(MGE, gprod[r], rgdp[r] - GDP0[r])
+        else
+            @aux_constraint(MGE, gprod[r], gprod[r] - GP0[r])
+        end
     end
 
     fix(PU[:usa], 1.0)
-    state = (; MGE, R, K0, L0, SAV, GRG, GDP0, gprod, rgdp,
+    state = (; MGE, R, K0, L0, SAV, GRG, GDP0, gprod, rgdp, GP0 = gp0, simu,
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
         labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
         inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())
