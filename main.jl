@@ -1,141 +1,20 @@
-cd(@__DIR__)    # Set the working directory at where this file is located
-using Pkg
-
-Pkg.activate(".")
-
-#=
-Pkg.add([
-"CSV",
-"DataFrames",
-"JLD2",
-"JuMP",
-"MPSGE",
-"PATHSolver",
-"XLSX"
-])
-=#
-
-#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/CSVtoDIC")
-#Pkg.develop(path="D:/work/MIT Dropbox/Yen-Heng Chen/Programming/Julia/GTAPdata")
-#Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
-#Pkg.add(path="https://github.com/chenyhmitedu/GTAPdata")
-#Pkg.update("GTAPdata")
-
-#Pkg.add("DataFrames")
-#Pkg.add("XLSX")
-#Pkg.add("Tables")
-
-Pkg.instantiate()
-
 using EPPAinJulia
-using JuMP
-using MPSGE
 
-using DataFrames
-using XLSX
-using Tables
-
-import PATHSolver
-PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0")
-
-# Load_data(): Read GTAP data (CSV to JLD2, and then to a dictionary)
-# Uno_data(): Use the EPPA variable and parameter notations
-# Uno_data without () refers to the function object itself. The |> operator expects a function on its RHS, not a function call.
-
-# Uno_data now has two inputs: data and Load_gtap_disa()
-Prepare_data() = Load_gtap_aggr() |> Load_satellite_data |> data -> Uno_data(data, Load_gtap_disa()) 
-data = Prepare_data()
-
-# MGE_model is defined in MGE.jl 
-MGE = EPPA_model(data, -1)
-solve!(MGE, cumulative_iteration_limit = 0)
-
-# Include the case file
-
-# ARGS: a built-in Julia global variable that holds the command-line arguments passed to the Julia program when it is started.
-# For example, in the command prompt (not Julian mode), when we type julia main.jl, length(ARGS) = 0, and so refcalib is run.
-# When we type julia main.jl ref.jl, length(ARGS) != 0, and filename = AGRS[1].
-
-# Counterfactual simulation
-# counterfactual    = false 
-
-if length(ARGS) == 0
-    filename = "refcalib.jl"
-    #filename = "ref.jl"
-    #filename = "cpqs.jl"
-else
-    filename = ARGS[1]
-end
-
-case = joinpath(@__DIR__, "src/active/", filename)
-include(case)
-
-data["pr_t"] = merge(
-    Dict(
-                    (t, r) => (data["popa_eppa"][t + (years[2]-years[1]), r]/data["popa_eppa"][t, r]) - 1
-                    for t ∈ [years[1]], r ∈ data["set_r"]
-                    ),
-    Dict(
-                    (t, r) => (data["popa_eppa"][t+5, r]/data["popa_eppa"][t, r]) - 1
-                    for t ∈ setdiff(years, years[1]), r ∈ data["set_r"]
-                    ),
+root = joinpath(@__DIR__, "..", "EPPA8")
+data = prepare(
+    joinpath(root, "data", "eppa8data_2017.dat"),
+    joinpath(root, "data", "eppa8data_elec_2017.dat"),
+    joinpath(root, "data", "extracted"),
 )
-
-data["gr_t"] = Dict(
-                    (t, r) => data["argdpgrrate"][t, r]
-                    for t ∈ years, r ∈ data["set_r"]
-                    )
-
-# To avoid including .jl as an EXCEL file name
-fn = chop(filename, tail=3)
-pt = "./src/results/results_$(fn).xlsx"
-
-data["filename"]    = fn
-data["tp"]          = years
-
-results = Recursive(data, setting)
-
-#=
-df = generate_report(MGE)
-dff = df[df.margin .> 1e-6, :]
-println(dff)
-println(df)
-=#
-
-# Output
-
-names = [:gdp, :len, :ken, :st, :gdptar]
-d = Dict{Symbol, Dict}()
-
-for (i, name) in enumerate(names)
-    d[name] = results[i]
-end
-
-function dicts_to_xlsx(d::Dict, path::AbstractString)
-    XLSX.openxlsx(path, mode="w") do xf
-        first_sheet = true
-        for name in names         # sheet order
-            inner = d[name]
-            df = DataFrame(
-                t     = first.(keys(inner)),
-                r     = string.(last.(keys(inner))),
-                value = collect(values(inner)),
-            )
-            sort!(df, [:t, :r])
-
-            if first_sheet
-                XLSX.rename!(xf[1], string(name))
-                first_sheet = false
-            else
-                XLSX.addsheet!(xf, string(name))
-            end
-            XLSX.writetable!(xf[string(name)], df)
-        end
+println("regions ", length(data.REGIONS))
+out = joinpath(@__DIR__, "results")
+mkpath(out)
+path = joinpath(out, "gprod.csv")
+M, st, rows = calibrate(data; csv = path)
+open(path, "w") do io
+    println(io, "year,region,gprod,rgdp,target,status")
+    for row in rows
+        println(io, row.year, ",", row.region, ",", row.gprod, ",", row.rgdp, ",", row.target, ",", row.status)
     end
 end
-
-dicts_to_xlsx(d, pt)
-
-
-
-
+println("wrote ", path)
