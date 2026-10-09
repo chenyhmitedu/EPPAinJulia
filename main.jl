@@ -13,11 +13,11 @@ end
 include(casefile)
 casename = splitext(basename(casefile))[1]
 
-root = joinpath(@__DIR__, "..", "EPPA8")
+here = joinpath(@__DIR__, "data")
 data = prepare(
-    joinpath(root, "data", "eppa8data_2017.dat"),
-    joinpath(root, "data", "eppa8data_elec_2017.dat"),
-    joinpath(root, "data", "extracted"),
+    joinpath(here, "eppa8data_2017.dat"),
+    joinpath(here, "eppa8data_elec_2017.dat"),
+    joinpath(here, "extracted"),
 )
 println("regions ", length(data.REGIONS))
 
