@@ -3,6 +3,7 @@ Pkg.activate(".")
 Pkg.instantiate()
 
 using EPPAinJulia
+using MPSGE: solve!
 
 root = joinpath(@__DIR__, "..", "EPPA8")
 data = prepare(
@@ -11,6 +12,12 @@ data = prepare(
     joinpath(root, "data", "extracted"),
 )
 println("regions ", length(data.REGIONS))
+
+println("\n================ base-year calibration check ================")
+flush(stdout)
+MGE = EPPA_model(data, -1)
+solve!(MGE, cumulative_iteration_limit = 0)
+
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, "gprod.csv")
