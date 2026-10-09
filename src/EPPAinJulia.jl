@@ -327,11 +327,63 @@ function _install_gprod!(st, bau, year)
     return nothing
 end
 
-function recursive(data; simu, iter0 = true, stop = 2100, csv = "")
+function _savepoint_dir(scenario)
+    d = normpath(joinpath(@__DIR__, "..", "savepoint", scenario))
+    mkpath(d)
+    return d
+end
+
+function _point_levels(MGE)
+    jm = jump_model(MGE)
+    out = Dict{String,Float64}()
+    for v in all_variables(jm)
+        JuMP.is_fixed(v) && continue
+        x = try
+            value(v)
+        catch
+            continue
+        end
+        isfinite(x) || continue
+        out[JuMP.name(v)] = x
+    end
+    return out
+end
+
+function _save_point!(MGE, dir, year)
+    isempty(dir) && return nothing
+    path = joinpath(dir, string(year) * ".jld2")
+    JLD2.save(path, "levels", _point_levels(MGE))
+    println("savepoint ", path)
+    flush(stdout)
+    return path
+end
+
+function _load_point!(MGE, dir, year)
+    isempty(dir) && return false
+    path = joinpath(dir, string(year) * ".jld2")
+    isfile(path) || return false
+    levels = JLD2.load(path, "levels")
+    jm = jump_model(MGE)
+    n = 0
+    for v in all_variables(jm)
+        JuMP.is_fixed(v) && continue
+        x = get(levels, JuMP.name(v), nothing)
+        x === nothing && continue
+        set_start_value(v, x)
+        n += 1
+    end
+    println("loaded savepoint ", path, " (", n, " variables)")
+    flush(stdout)
+    return n > 0
+end
+
+function recursive(data; simu, iter0 = true, stop = 2100, csv = "", scenario = "")
     simu = Int(simu)
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
     bau = simu == 1 ? _load_bau() : nothing
+    spdir = isempty(scenario) ? "" : _savepoint_dir(scenario)
     println(simu == 0 ? "\nTFP calibration (simu = 0)" : "\nendogenous GDP, gprod from bau.jld2 (simu = 1)")
+    isempty(spdir) || println("savepoint ", spdir)
     flush(stdout)
     MGE, st = build_model(data; simu)
     MGE.silent = false
@@ -344,6 +396,7 @@ function recursive(data; simu, iter0 = true, stop = 2100, csv = "")
     end
     years = [y for y in YEARS if y <= stop]
     simu == 1 && _install_gprod!(st, bau, years[1])
+    _load_point!(MGE, spdir, years[1])
     if iter0
         println("\n================ ", years[1], " (benchmark) ================")
         flush(stdout)
@@ -362,11 +415,13 @@ function recursive(data; simu, iter0 = true, stop = 2100, csv = "")
         elseif k == 1
             println("\n================ ", year, " ================")
             flush(stdout)
+            _load_point!(MGE, spdir, year)
             stt = _solve!(MGE)
             _warm!(MGE)
         else
             println("\n================ ", year, " ================")
             flush(stdout)
+            _load_point!(MGE, spdir, year)
             stt = _advance_and_solve!(MGE, st, data, years[k - 1], year)
         end
         gap = _gdp_gap(st)
@@ -405,6 +460,7 @@ function recursive(data; simu, iter0 = true, stop = 2100, csv = "")
             println(simu == 0 ? "stop: GDP target not met in " : "stop: period did not solve in ", year)
             break
         end
+        _save_point!(MGE, spdir, year)
         finished = year == years[end]
     end
     if simu == 0 && finished

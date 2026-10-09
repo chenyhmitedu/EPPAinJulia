@@ -29,7 +29,7 @@ solve!(MGE, cumulative_iteration_limit = 0)
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, casename * ".csv")
-MGE, st, rows = recursive(data; simu, csv = path)
+MGE, st, rows = recursive(data; simu, csv = path, scenario = casename)
 open(path, "w") do io
     println(io, "year,region,gprod,rgdp,target,status")
     for row in rows
