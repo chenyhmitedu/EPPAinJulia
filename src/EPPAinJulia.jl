@@ -1,10 +1,11 @@
 module EPPAinJulia
 
 using JuMP
+using JLD2
 using MPSGE
 using PATHSolver
 
-export load_benchmark, prepare, build_model, EPPA_model, calibrate
+export load_benchmark, prepare, build_model, EPPA_model, recursive
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -196,7 +197,11 @@ function _scale_start!(MGE, st, old)
         lrat = o.L > 0 ? o.Ln / o.L : 1.0
         g0 = start_value(st.gprod[r])
         g0 = g0 === nothing ? 1.0 : g0
-        set_start_value(st.gprod[r], max(g0 * grow / lrat, 1e-6))
+        if st.simu == 0
+            set_start_value(st.gprod[r], max(g0 * grow / lrat, 1e-6))
+        else
+            JuMP.set_start_value(get_variable(st.gprod[r]), JuMP.value(st.GP0[r]))
+        end
         set_start_value(st.rgdp[r], o.Gn)
     end
     return nothing
@@ -289,8 +294,46 @@ function _advance_and_solve!(MGE, st, data, year, next)
 end
 
 
-function calibrate(data; iter0 = true, stop = 2100, csv = "")
-    MGE, st = build_model(data)
+function _bau_path()
+    return normpath(joinpath(@__DIR__, "..", "data", "bau.jld2"))
+end
+
+function _save_bau(rows)
+    bau = Dict{Tuple{Symbol,Int},Dict{Symbol,Float64}}()
+    for row in rows
+        slot = get!(bau, (:gprod, row.year), Dict{Symbol,Float64}())
+        slot[row.region] = row.gprod
+    end
+    mkpath(dirname(_bau_path()))
+    JLD2.save(_bau_path(), "bau", bau)
+    println("wrote ", _bau_path())
+    flush(stdout)
+    return bau
+end
+
+function _load_bau()
+    path = _bau_path()
+    isfile(path) || error("missing ", path, "; run active/refcalib.jl (simu = 0) first")
+    return JLD2.load(path, "bau")
+end
+
+function _install_gprod!(st, bau, year)
+    col = bau[(:gprod, year)]
+    for r in st.R
+        gp = col[r]
+        set_value!(st.GP0[r], gp)
+        JuMP.set_start_value(get_variable(st.gprod[r]), gp)
+    end
+    return nothing
+end
+
+function recursive(data; simu, iter0 = true, stop = 2100, csv = "")
+    simu = Int(simu)
+    simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
+    bau = simu == 1 ? _load_bau() : nothing
+    println(simu == 0 ? "\nTFP calibration (simu = 0)" : "\nendogenous GDP, gprod from bau.jld2 (simu = 1)")
+    flush(stdout)
+    MGE, st = build_model(data; simu)
     MGE.silent = false
     JuMP.unset_silent(jump_model(MGE))
     rows = NamedTuple[]
@@ -300,6 +343,7 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
         end
     end
     years = [y for y in YEARS if y <= stop]
+    simu == 1 && _install_gprod!(st, bau, years[1])
     if iter0
         println("\n================ ", years[1], " (benchmark) ================")
         flush(stdout)
@@ -308,7 +352,11 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
         flush(stdout)
         _warm!(MGE)
     end
+    finished = false
     for (k, year) in enumerate(years)
+        if simu == 1 && !(iter0 && k == 1)
+            _install_gprod!(st, bau, year)
+        end
         if iter0 && k == 1
             stt = termination_status(jump_model(MGE))
         elseif k == 1
@@ -323,7 +371,7 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
         end
         gap = _gdp_gap(st)
         res = _residual(MGE)
-        if !_ok(stt) && gap <= 1e-4 && isfinite(res) && res <= 1e-3
+        if simu == 0 && !_ok(stt) && gap <= 1e-4 && isfinite(res) && res <= 1e-3
             stt = MOI.ALMOST_LOCALLY_SOLVED
         end
         println(year, " ", stt, " res ", res, " gap ", gap)
@@ -348,10 +396,19 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
                 end
             end
         end
-        if !(_ok(stt) || (isfinite(res) && res <= 1.0 && gap <= 1e-4))
-            println("stop: GDP target not met in ", year)
+        passed = if simu == 0
+            _ok(stt) || (isfinite(res) && res <= 1.0 && gap <= 1e-4)
+        else
+            _ok(stt) || (isfinite(res) && res <= 1e-4)
+        end
+        if !passed
+            println(simu == 0 ? "stop: GDP target not met in " : "stop: period did not solve in ", year)
             break
         end
+        finished = year == years[end]
+    end
+    if simu == 0 && finished
+        _save_bau(rows)
     end
     return MGE, st, rows
 end
