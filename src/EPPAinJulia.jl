@@ -5,7 +5,7 @@ using JLD2
 using MPSGE
 using PATHSolver
 
-export load_benchmark, prepare, build_model, EPPA_model, recursive
+export load_benchmark, prepare, build_model, EPPA_model, run_scenario
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -377,7 +377,7 @@ function _load_point!(MGE, dir, year)
     return n > 0
 end
 
-function recursive(data; simu, iter0 = true, stop = 2100, csv = "", scenario = "")
+function run_scenario(data; simu, iter0 = true, stop = 2100, csv = "", scenario = "")
     simu = Int(simu)
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
     bau = simu == 1 ? _load_bau() : nothing
