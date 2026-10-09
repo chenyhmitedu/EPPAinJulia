@@ -1,3 +1,7 @@
+using Pkg
+Pkg.activate(".")
+Pkg.instantiate()
+
 using EPPAinJulia
 
 root = joinpath(@__DIR__, "..", "EPPA8")
@@ -10,7 +14,7 @@ println("regions ", length(data.REGIONS))
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, "gprod.csv")
-M, st, rows = calibrate(data; csv = path)
+MGE, st, rows = calibrate(data; csv = path)
 open(path, "w") do io
     println(io, "year,region,gprod,rgdp,target,status")
     for row in rows

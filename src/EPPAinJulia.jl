@@ -12,7 +12,7 @@ const MOI = JuMP.MOI
 include("load.jl")
 include("calib.jl")
 include("smooth.jl")
-include("model.jl")
+include("eppacore.jl")
 
 function __init__()
     apply_smooth!()
@@ -37,8 +37,8 @@ function _srve(year)
     return year == 2017 ? (1 - DPE)^3 : (1 - DPE)^5
 end
 
-function _warm!(M)
-    jm = jump_model(M)
+function _warm!(MGE)
+    jm = jump_model(MGE)
     for v in all_variables(jm)
         x = try
             value(v)
@@ -51,8 +51,8 @@ function _warm!(M)
     return nothing
 end
 
-function _snap(M)
-    jm = jump_model(M)
+function _snap(MGE)
+    jm = jump_model(MGE)
     out = Dict{String,Float64}()
     for v in all_variables(jm)
         s = start_value(v)
@@ -62,8 +62,8 @@ function _snap(M)
     return out
 end
 
-function _restore!(M, snap)
-    jm = jump_model(M)
+function _restore!(MGE, snap)
+    jm = jump_model(MGE)
     for v in all_variables(jm)
         s = get(snap, JuMP.name(v), nothing)
         s === nothing && continue
@@ -72,13 +72,13 @@ function _restore!(M, snap)
     return nothing
 end
 
-function _solve!(M; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 3)
-    jm = jump_model(M)
+function _solve!(MGE; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 3)
+    jm = jump_model(MGE)
     if !haskey(JuMP.object_dictionary(jm), :z_p)
-        was = M.silent
-        M.silent = true
-        solve!(M; cumulative_iteration_limit = 0, output = "no")
-        M.silent = was
+        was = MGE.silent
+        MGE.silent = true
+        solve!(MGE; cumulative_iteration_limit = 0, output = "no")
+        MGE.silent = was
     end
     JuMP.unset_silent(jm)
     kw = unsafe_backend(jm).ext[:kwargs]
@@ -102,8 +102,8 @@ function _solve!(M; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 3)
     return termination_status(jm)
 end
 
-function _residual(M)
-    jm = jump_model(M)
+function _residual(MGE)
+    jm = jump_model(MGE)
     b = unsafe_backend(jm)
     opt = b
     if hasproperty(b, :optimizer)
@@ -137,11 +137,11 @@ function _gdp_gap(st)
     return gap
 end
 
-function _targets(M, st, data, year, next)
+function _targets(MGE, st, data, year, next)
     ord = findfirst(==(year), YEARS)
     out = Dict{Symbol,NamedTuple}()
     for r in st.R
-        inv_level = max(_level(M[:INV][r]), 0.0)
+        inv_level = max(_level(MGE[:INV][r]), 0.0)
         knew = st.scale[r] * ROR * st.inv0[r] * inv_level * _boost(r, ord) + _level(st.K0[r]) * _srve(year)
         out[r] = (
             K = _level(st.K0[r]),
@@ -176,8 +176,8 @@ function _lastsym(name)
     return Symbol(strip(split(m.captures[1], ",")[end]))
 end
 
-function _scale_start!(M, st, old)
-    jm = jump_model(M)
+function _scale_start!(MGE, st, old)
+    jm = jump_model(MGE)
     regs = Set(st.R)
     world = sum(old[r].G > 0 ? old[r].Gn / old[r].G : 1.0 for r in st.R) / length(st.R)
     for v in all_variables(jm)
@@ -202,8 +202,8 @@ function _scale_start!(M, st, old)
     return nothing
 end
 
-function _prices_to_one!(M)
-    jm = jump_model(M)
+function _prices_to_one!(MGE)
+    jm = jump_model(MGE)
     for v in all_variables(jm)
         JuMP.is_fixed(v) && continue
         n = JuMP.name(v)
@@ -219,39 +219,39 @@ function _usable(stt, res, gap)
     return isfinite(res) && isfinite(gap) && gap <= 1e-5 && res <= 1.0
 end
 
-function _advance_and_solve!(M, st, data, year, next)
-    old = _targets(M, st, data, year, next)
-    base = _snap(M)
+function _advance_and_solve!(MGE, st, data, year, next)
+    old = _targets(MGE, st, data, year, next)
+    base = _snap(MGE)
     _plant!(st, old, 1.0)
-    stt = _solve!(M; proximal = 1e-4, restarts = 3, iters = 30_000)
-    res = _residual(M)
+    stt = _solve!(MGE; proximal = 1e-4, restarts = 3, iters = 30_000)
+    res = _residual(MGE)
     gap = _gdp_gap(st)
     if !_usable(stt, res, gap)
         println("  warm ", stt, " res ", res, " gap ", gap)
         flush(stdout)
-        _restore!(M, base)
-        _scale_start!(M, st, old)
-        stt = _solve!(M; proximal = 1e-4, restarts = 2, iters = 20_000)
-        res = _residual(M)
+        _restore!(MGE, base)
+        _scale_start!(MGE, st, old)
+        stt = _solve!(MGE; proximal = 1e-4, restarts = 2, iters = 20_000)
+        res = _residual(MGE)
         gap = _gdp_gap(st)
         println("  scaled ", stt, " res ", res, " gap ", gap)
         flush(stdout)
     end
     if _usable(stt, res, gap)
-        _warm!(M)
+        _warm!(MGE)
         return _ok(stt) ? stt : MOI.ALMOST_LOCALLY_SOLVED
     end
     if isfinite(gap) && gap <= 1e-4 && isfinite(res) && res <= 5
         println("  polish ", res)
         flush(stdout)
-        _warm!(M)
-        stt2 = _solve!(M; proximal = 1e-4, restarts = 0, tol = 1e-4, iters = 8_000)
-        res2 = _residual(M)
+        _warm!(MGE)
+        stt2 = _solve!(MGE; proximal = 1e-4, restarts = 0, tol = 1e-4, iters = 8_000)
+        res2 = _residual(MGE)
         gap2 = _gdp_gap(st)
         println("  polished ", stt2, " res ", res2, " gap ", gap2)
         flush(stdout)
         if isfinite(res2) && res2 <= max(res, 1.0) && gap2 <= 1e-4
-            _warm!(M)
+            _warm!(MGE)
             return _ok(stt2) ? stt2 : MOI.ALMOST_LOCALLY_SOLVED
         end
     end
@@ -262,13 +262,13 @@ function _advance_and_solve!(M, st, data, year, next)
     for nstep in (4, 8)
         println("  homotopy ", nstep)
         flush(stdout)
-        _restore!(M, origin)
+        _restore!(MGE, origin)
         failed = false
         stt_last = MOI.OPTIMIZE_NOT_CALLED
         for s in 1:nstep
             _plant!(st, old, s / nstep)
-            stt_last = _solve!(M; proximal = 1e-4, tol = 1e-4, restarts = 2, iters = 12_000)
-            res = _residual(M)
+            stt_last = _solve!(MGE; proximal = 1e-4, tol = 1e-4, restarts = 2, iters = 12_000)
+            res = _residual(MGE)
             gap = _gdp_gap(st)
             if !(_usable(stt_last, res, gap) || (gap <= 5e-3 && isfinite(res) && res < 2))
                 println("    step ", s, " ", stt_last, " res ", res, " gap ", gap)
@@ -276,23 +276,23 @@ function _advance_and_solve!(M, st, data, year, next)
                 failed = true
                 break
             end
-            _warm!(M)
+            _warm!(MGE)
         end
         if !failed
             _plant!(st, old, 1.0)
             return _ok(stt_last) ? stt_last : MOI.ALMOST_LOCALLY_SOLVED
         end
     end
-    _restore!(M, origin)
+    _restore!(MGE, origin)
     _plant!(st, old, 1.0)
     return stt_last
 end
 
 
 function calibrate(data; iter0 = true, stop = 2100, csv = "")
-    M, st = build_model(data)
-    M.silent = false
-    JuMP.unset_silent(jump_model(M))
+    MGE, st = build_model(data)
+    MGE.silent = false
+    JuMP.unset_silent(jump_model(MGE))
     rows = NamedTuple[]
     if !isempty(csv)
         open(csv, "w") do io
@@ -303,26 +303,26 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
     if iter0
         println("\n================ ", years[1], " (benchmark) ================")
         flush(stdout)
-        stt = _solve!(M; iters = 200, tol = 1e-5, proximal = 0.0, restarts = 2)
-        println("benchmark ", stt, " res ", _residual(M), " gap ", _gdp_gap(st))
+        stt = _solve!(MGE; iters = 200, tol = 1e-5, proximal = 0.0, restarts = 2)
+        println("benchmark ", stt, " res ", _residual(MGE), " gap ", _gdp_gap(st))
         flush(stdout)
-        _warm!(M)
+        _warm!(MGE)
     end
     for (k, year) in enumerate(years)
         if iter0 && k == 1
-            stt = termination_status(jump_model(M))
+            stt = termination_status(jump_model(MGE))
         elseif k == 1
             println("\n================ ", year, " ================")
             flush(stdout)
-            stt = _solve!(M)
-            _warm!(M)
+            stt = _solve!(MGE)
+            _warm!(MGE)
         else
             println("\n================ ", year, " ================")
             flush(stdout)
-            stt = _advance_and_solve!(M, st, data, years[k - 1], year)
+            stt = _advance_and_solve!(MGE, st, data, years[k - 1], year)
         end
         gap = _gdp_gap(st)
-        res = _residual(M)
+        res = _residual(MGE)
         if !_ok(stt) && gap <= 1e-4 && isfinite(res) && res <= 1e-3
             stt = MOI.ALMOST_LOCALLY_SOLVED
         end
@@ -353,7 +353,7 @@ function calibrate(data; iter0 = true, stop = 2100, csv = "")
             break
         end
     end
-    return M, st, rows
+    return MGE, st, rows
 end
 
 end
