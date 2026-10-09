@@ -9,6 +9,16 @@ function build_model(B)
     return Base.invokelatest(_build_model, B)
 end
 
+# iter = -1 is the base year, before any endowment update.
+# solve!(MGE, cumulative_iteration_limit = 0) then reports the benchmark residual.
+function EPPA_model(data, iter::Integer = -1)
+    iter == -1 || throw(ArgumentError(
+        "EPPA_model(data, -1) is the base-year model. Later years are solved by calibrate.",
+    ))
+    MGE, _ = build_model(data)
+    return MGE
+end
+
 function _build_model(B)
     PATHSolver.c_api_License_SetString(PATH_LICENSE)
     MGE = MPSGEModel()
