@@ -1,6 +1,8 @@
 # Keep CES / Cobb-Douglas / Shephard's lemma finite at a zero price.
 # At benchmark prices the perturbation is ~1e-8. Without it, PATH's Jacobian
 # is NaN once a price sits on its bound and calibration dies after 2060.
+const _smooth_announced = Ref(false)
+
 function apply_smooth!()
     @eval MPSGE begin
         function _soft(x)
@@ -65,6 +67,10 @@ function apply_smooth!()
             end
             return sum(total_income; init = 0)
         end
+    end
+    if !_smooth_announced[]
+        println("CES/Cobb-Douglas price smoothing is on")
+        _smooth_announced[] = true
     end
     return nothing
 end
