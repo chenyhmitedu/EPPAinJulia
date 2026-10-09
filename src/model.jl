@@ -4,7 +4,12 @@
 # Stone-Geary, or emissions commodities.
 
 function build_model(B)
+    # New methods are invisible to this call frame. Rebuild in the latest world.
     apply_smooth!()
+    return Base.invokelatest(_build_model, B)
+end
+
+function _build_model(B)
     PATHSolver.c_api_License_SetString(PATH_LICENSE)
     M = MPSGEModel()
     R = REGIONS

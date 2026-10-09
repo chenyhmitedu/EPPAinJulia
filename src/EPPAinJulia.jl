@@ -14,6 +14,11 @@ include("calib.jl")
 include("smooth.jl")
 include("model.jl")
 
+function __init__()
+    apply_smooth!()
+    return nothing
+end
+
 function _level(x)
     v = try
         value(x)
