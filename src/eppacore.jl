@@ -13,7 +13,7 @@ end
 # solve!(MGE, cumulative_iteration_limit = 0) then reports the benchmark residual.
 function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
     iter == -1 || throw(ArgumentError(
-        "EPPA_model(data, -1) is the base-year model. Later years are solved by recursive.",
+        "EPPA_model(data, -1) is the base-year model. Later years are solved by run_scenario.",
     ))
     bau = simu == 1 ? _load_bau() : nothing
     MGE, st = build_model(data; simu)
