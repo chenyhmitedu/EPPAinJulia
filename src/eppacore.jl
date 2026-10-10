@@ -535,7 +535,7 @@ function _build_model(B, simu::Integer = 0)
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
         labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
         inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())
-    srve0 = (1 - DPE)^5
+    srve0 = (1 - DPE)^regular_step()
     for r in R
         state.scale[r] = (state.kapital0[r] - state.kapital0[r] * srve0) / (0.95 * ROR * state.inv0[r])
     end

@@ -1,6 +1,30 @@
 # Readers for the GAMS parameter dump and the xls2gms tables used by this run.
 
-const YEARS = [2017; 2020; collect(2025:5:2100)]
+function load_years(path)
+    years = Int[]
+    for ln in eachline(path)
+        s = strip(ln)
+        (isempty(s) || startswith(s, "*") || startswith(s, "#")) && continue
+        push!(years, parse(Int, split(s)[1]))
+    end
+    (length(years) >= 2 && issorted(years) && allunique(years)) ||
+        error("period list in $path must be at least two increasing years")
+    return years
+end
+
+const YEARS = load_years(normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
+
+# Years between period i and the next period.
+function step_years(i::Integer)
+    1 <= i < length(YEARS) || error("period $i has no following year")
+    return YEARS[i + 1] - YEARS[i]
+end
+
+# Length of a normal step, after the short opening step. Benchmark capital
+# survival uses this, as srve(r,"t0") does in EPPA.
+function regular_step()
+    return length(YEARS) >= 3 ? step_years(2) : step_years(1)
+end
 
 function tcode(year)
     i = findfirst(==(year), YEARS)
@@ -94,12 +118,17 @@ function load_benchmark(dat_path, extracted_dir)
 end
 
 function growth_factor(data, r, year)
-    if year == 2017
-        return data.hist[(:t001, r)]^3
-    elseif year == 2020
-        return data.hist[(:t002, r)]^5
+    i = findfirst(==(year), YEARS)
+    i === nothing && error("year $year is not an EPPA period")
+    # Opening step uses the historical index over the actual gap.
+    # The second period still uses that index, then annual rates, both
+    # compounded over a normal step.
+    if i == 1
+        return data.hist[(tcode(year), r)]^step_years(1)
+    elseif i == 2
+        return data.hist[(tcode(year), r)]^regular_step()
     else
-        return (1 + data.ann[(tcode(year), r)])^5
+        return (1 + data.ann[(tcode(year), r)])^regular_step()
     end
 end
 
