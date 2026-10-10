@@ -35,7 +35,10 @@ function _boost(r, ord)
 end
 
 function _srve(year)
-    return year == 2017 ? (1 - DPE)^3 : (1 - DPE)^5
+    i = findfirst(==(year), YEARS)
+    i === nothing && error("year $year is not an EPPA period")
+    n = i == 1 ? step_years(1) : regular_step()
+    return (1 - DPE)^n
 end
 
 function _warm!(MGE)
@@ -377,7 +380,7 @@ function _load_point!(MGE, dir, year)
     return n > 0
 end
 
-function run_scenario(data; simu, iter0 = true, stop = 2100, csv = "", scenario = "")
+function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", scenario = "")
     simu = Int(simu)
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
     bau = simu == 1 ? _load_bau() : nothing
