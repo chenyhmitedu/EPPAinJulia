@@ -1,291 +1,543 @@
-function EPPACore(MGE, data, setting)
+# Active EPPA8 blocks: production by nest class, electricity technologies,
+# Armington and bilateral trade, homogeneous oil, household transport,
+# welfare, and the gprod/rgdp closure. No vintage, backstops, land use,
+# Stone-Geary, or emissions commodities.
 
-    @parameters(MGE, begin
-        tm[i=data["set_i"],     r=data["set_r"], s=data["set_r"]],  data["rtms0"][i, r, s], (description = "Import tax rates")
-        tx[i=data["set_i"],     r=data["set_r"], s=data["set_r"]],  data["rtxs0"][i, r, s], (description = "Export subsidy rates")
-        td[r=data["set_r"],     g=data["set_g"]],                   data["rto0"][g, r],     (description = "Output tax or subsidy rates")
-        ta[i=data["set_i"],     g=data["set_g"], r=data["set_r"]],  data["ta0"][i, g, r],   (description = "Tax rate on Armington good")
-        tf[f=data["set_f"],     i=data["set_i"], r=data["set_r"]],  data["rtf0"][f, i, r],  (description = "Primary factor tax rates")
-        tb[r=data["set_r"]],                                        data["tb0"][r],         (description = "Tax rate on biofuels used by HOW")
-        tde[r=data["set_r"],    g=data["set_v"]],                   data["rto0e"][g, r],    (description = "Output tax or subsidy rates")
-        tae[i=data["set_i"],    g=data["set_v"], r=data["set_r"]],  data["ta0e"][i, g, r],  (description = "Tax rate on Armington good")
-        tfe[f=data["set_f"],    i=data["set_v"], r=data["set_r"]],  data["rtf0e"][f, i, r], (description = "Primary factor tax rates")
-        tfp[r=data["set_r"]],                                       1,                      (description = "Total factor productivity")
-        gdp[r=data["set_r"]],                                       data["gdp0"][r],        (description = "Real GDP")
-        tco2[r=data["set_r"]],                                      data["tco2"][r],        (description = "Baseline total CO2")
-        rer[r=data["set_r"]],                                       1,                      (description = "Remaining emissions ratio")
-        policy[r=data["set_r"]],                                    false,                  (description = "CO2 policy timing")
-        evom[f=data["set_mf"], r=data["set_r"]],                    data["evom"][f, r],     (description = "Return to mobile endowment")
-    end)
+function build_model(B; simu::Integer = 0)
+    # New methods are invisible to this call frame. Rebuild in the latest world.
+    apply_smooth!()
+    return Base.invokelatest(_build_model, B, Int(simu))
+end
 
-    @sectors(MGE, begin
-        D[i=data["set_i"], r=data["set_r"]],                       (description = "Supply")
-        DL[i=data["set_v"], r=data["set_r"]],                      (description = "Disaggregated power supply")
-        M[i=data["set_i"], r=data["set_r"]],                       (description = "Imports")
-        YT[i=data["set_i"]],                                       (description = "Transportation services")
-        X[i=data["set_i"], r=data["set_r"], s=data["set_r"]],      (description = "Exports: Subsidy and transport service included")
-        A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]],   (description = "Armington good: nonenergy and noncombusted p_c")
-        EN[i=data["set_e"], g=data["set_gnev"], r=data["set_r"]],  (description = "Armington good: energy goods including all combusted and elec")
-        Z[r=data["set_r"]],                                        (description = "Aggregate private consumption")
-        GOV[r=data["set_r"]],                                      (description = "Aggregate government consumption")
-        INV[r=data["set_r"]],                                      (description = "Investment")
-        HOW[r=data["set_r"]],                                      (description = "Household transportation: Own-supplied")
-        HHT[r=data["set_r"]],                                      (description = "Household transportation: Total")
-        B[r=data["set_r"]],                                        (description = "Conversion to traditional biofuels")
-        W[r=data["set_r"]],                                        (description = "Aggregate private consumption")
-    end)
-
-    @commodities(MGE, begin
-        PD[i=data["set_i"], r=data["set_r"]],                      (description = "Domestic output price")
-        PL[g=data["set_v"], r=data["set_r"]],                      (description = "Price index for each power subsector")  
-        PM[i=data["set_i"], r=data["set_r"]],                      (description = "Import price")
-        PT[i=data["set_i"]],                                       (description = "Transportation services")
-        PF[mf=data["set_mf"], r=data["set_r"]],                    (description = "Non-sector-specific primary factor rent")
-        PS[sf=data["set_sf"], g=data["set_gv"], r=data["set_r"]],  (description = "Sector-specific primary factor rent")
-        PX[i=data["set_i"], r=data["set_r"], s=data["set_r"]],     (description = "Price index for exports (include subsidy and transport service)")
-        PA[i=data["set_i"], r=data["set_r"]],                      (description = "Price index for Armington good")
-        PE[i=data["set_e"], g=data["set_gv"], r=data["set_r"]],    (description = "Price index for Armington energy good: carbon-penalty-inclusive")
-        PG[r=data["set_r"]],                                       (description = "Price index for aggregate government expenditure")
-        PU[r=data["set_r"]],                                       (description = "Price index for aggregate consumption")
-        PI[r=data["set_r"]],                                       (description = "Price index for investment")
-        PN[r=data["set_r"]],                                       (description = "Price index for household transportation: Own-supplied")
-        PH[r=data["set_r"]],                                       (description = "Price index for household transportation: Total")
-        PW[r=data["set_r"]],                                       (description = "Price index for saving included welfare")
-    end)
-
-    @consumers(MGE, begin
-        RA[r=data["set_r"]],                                       (description = "Representative agent")
-    end)
-
-    @auxiliaries(MGE, begin
-        CTAXR[i=data["set_fe"], r=data["set_r"]],                  (description = "Carbon tax rate")
-        PC[r=data["set_r"]],                                       (description = "Carbon price index (USD/t-CO2)")
-        TCO2[r=data["set_r"]],                                     (description = "Total CO2 [billion t-CO2]")
-        GDP[r=data["set_r"]],                                      (description = "Real GDP")
-        TFP[r=data["set_r"]],                                      (description = "Total factor productivity")
-        GDPINDEX[r=data["set_r"]],                                 (description = "Real GDP index with base year normalizing to one")
-    end)
-
-    for r ∈ data["set_r"]
-        set_start_value(TCO2[r], data["tco2"][r])
-        set_start_value(GDP[r], data["gdp0"][r])
-        set_start_value(GDPINDEX[r], 1)
-        set_start_value(TFP[r], 1)
-        set_lower_bound(MGE[:PC][r], 0.0)
-        set_lower_bound(MGE[:GDP][r], 0.0)
-        set_lower_bound(MGE[:GDPINDEX][r], 0.0)
-        set_lower_bound(MGE[:TFP][r], 0.0)
-        for f ∈ data["set_mf"]
-            set_lower_bound(MGE[:PF][f, r], 0.0)
-        end
-    end
-
-    @production(MGE, A[i=data["set_i"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 3], begin
-        @output(PA[i, r],                       data["xa0a"][r, i, g],      t)
-        @input(PD[i, r],                        data["xd0a"][r, i, g],      s)
-        @input(PM[i, r],                        data["xm0a"][r, i, g],      s)
-    end)
-
-    @production(MGE, EN[i=data["set_elec"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PE[i, g, r],                    data["xa0a"][r, i, g],      t)
-        @input(PA[i, r],                        data["xa0a"][r, i, g],      s)
-    end)
-
-    @production(MGE, EN[i=data["set_fe"], g=data["set_gnev"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PE[i, g, r],                    data["xa0a_c"][r, i, g],    t)
-        @input(PA[i, r],                        data["xa0a_c"][r, i, g],    s, taxes = [Tax(RA[r], CTAXR[i,r])])
-    end)
-
-    for g ∈ data["set_note"], r ∈ data["set_r"]
-        @production(MGE, D[g, r], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
-            @output(PD[g, r],                       data["xp0"][r, g],          t,      taxes = [Tax(RA[r], td[r, g])],     reference_price = 1-data["rto0"][g, r])
-            @input(PE[i=data["set_roil"], g, r],    data["xa0_c"][r, i, g],     fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_fnr"], g, r],     data["xa0"][r, i, g],       fe,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],    data["xa0"][r, i, g],       ee,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],         data["xa0"][r, i, g],       nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_roil"], r],       data["xa0_n"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])],  reference_price = 1+data["ta0"][i, g, r])
-            @input(PS[sf=data["set_fix"], g, r],    data["vfm"][sf, g, r],      s,      taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])
-            @input(PS[sf=data["set_lnd"], g, r],    data["vfm"][sf, g, r],      nl,     taxes = [Tax(RA[r], tf[sf, g, r])], reference_price = 1 + data["rtf0"][sf, g, r])
-            @input(PF[mf=data["set_mf"], r],        data["vfm"][mf, g, r],      va,     taxes = [Tax(RA[r], tf[mf, g, r])], reference_price = 1 + data["rtf0"][mf, g, r])
-        end)
-    end
-
-    # The only way to use the same D[i, r] for data["set_note"] and data["set_elec"] is to use the for loop rather than using D[i=data[...], r=data[...]]
-    for i ∈ data["set_elec"], r ∈ data["set_r"]
-        @production(MGE, D[i, r], [t = 0, s = 0, s1 => s = 5], begin
-            @output(PD[i, r],                       data["xp0"][r, i],          t)
-            @input(PL[:tele, r],                    data["xp0e"][r, :tele],     s)
-            @input(PL[g=data["set_vole"], r],       data["xp0e"][r, g],         s)
-        end)
-    end
-
-    # Power subsector
-    @production(MGE, DL[g=data["set_v"], r=data["set_r"]], [t= 0, s = 0.3, nl => s = 0.3, nv => nl = 0.1, va => nv = 1, ne => nv = 0.1, nn => ne = 0.1, ee => ne = 1.5, fe => ee = 1.0], begin
-        @output(PL[g, r],                       data["xp0e"][r, g],         t,      taxes = [Tax(RA[r], tde[r, g])],     reference_price = 1-data["rto0e"][g, r])
-        @input(PE[i=data["set_roil"], g, r],    data["xa0e_c"][r, i, g],    fe,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
-        @input(PE[i=data["set_fnr"], g, r],     data["xa0e"][r, i, g],      fe,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
-        @input(PE[i=data["set_elec"], g, r],    data["xa0e"][r, i, g],      ee,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
-        @input(PA[i=data["set_ne"], r],         data["xa0e"][r, i, g],      nn,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
-        @input(PA[i=data["set_roil"], r],       data["xa0e_n"][r, i, g],    nn,     taxes = [Tax(RA[r], tae[i, g, r])],  reference_price = 1+data["ta0e"][i, g, r])
-        @input(PS[sf=data["set_fix"], g, r],    data["vfme"][sf, g, r],     s,      taxes = [Tax(RA[r], tfe[sf, g, r])], reference_price = 1 + data["rtf0e"][sf, g, r])
-        @input(PS[sf=data["set_lnd"], g, r],    data["vfme"][sf, g, r],     nl,     taxes = [Tax(RA[r], tfe[sf, g, r])], reference_price = 1 + data["rtf0e"][sf, g, r])
-        @input(PF[mf=data["set_mf"], r],        data["vfme"][mf, g, r],     va,     taxes = [Tax(RA[r], tfe[mf, g, r])], reference_price = 1 + data["rtf0e"][mf, g, r])
-    end)
-
-    for g ∈ data["set_con"], r ∈ data["set_r"]
-        @production(MGE, Z[r], [t = 0, s = 0, nh => s = 0.5, ne => nh = 0.25, nn => ne = 0.25, nd => ne = 0.3, ee => nd = 1.5, fe => ee = 1.5], begin
-            @output(PU[r],                      data["cons0"][r],           t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_roil"], g, r],data["xa0_rc"][r, i, g],    fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_fnr"], g, r], data["xa0"][r, i, g],       fe,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       ee,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_rest"], r],   data["xa0"][r, i, g],       nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_serv"], r],   data["xa0_s"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_othr"], r],   data["xa0_o"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_food"], r],   data["xa0_f"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_eint"], r],   data["xa0_e"][r, i, g],     nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_roil"], r],   data["xa0_rn"][r, i, g],    nn,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_dwe"], r],    data["xa0"][r, i, g],       nd,     taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PH[r],                       data["tottrn"][r],          nh)
-        end)
-    end
-
-    for r ∈ data["set_r"], g ∈ data["set_con"]
-        @production(MGE, HHT[r], [t = 0, s = 0.2], begin
-            @output(PH[r],                      data["tottrn"][r],          t)
-            @input(PN[r],                       data["own"][r],             s)
-            @input(PA[i=data["set_tran"], r],   data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-        end)
-    end
-
-    for r ∈ data["set_r"]
-        @production(MGE, HOW[r], [t = 0, s = 0.1, a => s = 0.75, c => a = 0.0, b => s = 1.0], begin
-            @output(PN[r],                      data["own"][r],             t)
-            @input(PE[:p_c, :c, r],             data["tfb_c"][r],           c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:p_c, r],                 data["tfo_n"][r],           c,      taxes = [Tax(RA[r], ta[:p_c, :c, r])], reference_price = 1+data["ta0"][:p_c, :c, r])
-            @input(PA[:othr, r],                data["toi_prop"][r],        a,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:othr, r],                data["toi_rest"][r],        b,      taxes = [Tax(RA[r], ta[:othr, :c, r])], reference_price = 1+data["ta0"][:othr, :c, r])
-            @input(PA[:serv, r],                data["tse"][r],             b,      taxes = [Tax(RA[r], ta[:serv, :c, r])], reference_price = 1+data["ta0"][:serv, :c, r])
-        end)
-    end
-
-    for r ∈ data["set_r"]
-        @production(MGE, B[r], [t = 0, s = 0], begin
-            @output(PE[:p_c, :c, r],            data["tbo_r"][r],           t)
-            if r ∈ data["set_br"]
-                @input(PA[:eint, r],            data["tbo"][r],             s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
-            else
-                @input(PA[:food, r],            data["tbo"][r],             s,      taxes = [Tax(RA[r], tb[r])], reference_price = 1+data["tb0"][r])
-            end
-        end)
-    end
-
-    for g ∈ data["set_gov"], r ∈ data["set_r"]
-        @production(MGE, GOV[r], [t = 0, s = 0.5], begin
-            @output(PG[r],                      data["g0"][r],              t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-        end)
-    end
-
-    for g ∈ data["set_inv"], r ∈ data["set_r"]
-        @production(MGE, INV[r], [t = 0, s = 5], begin
-            @output(PI[r],                      data["inv0"][r],            t,      taxes = [Tax(RA[r], td[r, g])])
-            @input(PE[i=data["set_fe"], g, r],  data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PE[i=data["set_elec"], g, r],data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-            @input(PA[i=data["set_ne"], r],     data["xa0"][r, i, g],       s,      taxes = [Tax(RA[r], ta[i, g, r])], reference_price = 1+data["ta0"][i, g, r])
-        end)
-    end
-
-    @production(MGE, YT[j=data["set_i"]], [t = 0, s = 1], begin
-        @output(PT[j],                          data["vtw"][j],             t)
-        @input(PD[j, r=data["set_r"]],          data["vst"][j, r],          s)
-    end)
-
-    # Imports for region r
-    @production(MGE, M[i=data["set_i"], r=data["set_r"]], [t = 0, s = 5], begin
-        @output(PM[i, r],                       data["vim"][i, r],          t)
-        @input(PX[i, s=data["set_r"], r],       data["x0"][s, r, i],        s,      taxes = [Tax(RA[r], tm[i, s, r])], reference_price = data["pvtwr"][i, s, r])
-    end)
-
-    # Exports for region s
-    @production(MGE, X[i=data["set_i"], s=data["set_r"], r=data["set_r"]], [t = 0, s = 0], begin
-        @output(PX[i, s, r], data["x0"][s, r, i],                           t)
-        @input(PD[i, s],                        data["wtflow0"][r, s, i],   s,    taxes = [Tax(RA[s], -tx[i, s, r])],   reference_price = 1 - data["rtxs0"][i, s, r])
-        @input(PT[j=data["set_i"]],             data["vtwr"][j, i, s, r],   s)
-    end)
-
-    @production(MGE, W[r=data["set_r"]], [t = 0, s = 0.5], begin
-        @output(PW[r],                          data["w0"][r],              t)
-        @input(PU[r],                           data["cons0"][r],           s)
-        @input(PI[r],                           data["inv0"][r],            s)
-    end)
-
-    @demand(MGE, RA[r=data["set_r"]], begin
-        @final_demand(PW[r],                                    data["w0"][r])
-        @endowment(PU[:USA],                                    data["vb"][r]*GDPINDEX[r])
-        @endowment(PG[r],                                      -data["g0"][r]*GDPINDEX[r])
-        @endowment(PF[f=data["set_mf"], r],                     evom[f, r]*TFP[r])
-        @endowment(PS[f=data["set_fix"], j=data["set_i"], r],   data["vfm"][f, j, r])
-        @endowment(PS[f=data["set_lnd"], j=data["set_i"], r],   data["vfm"][f, j, r])
-    end)
-
-    for r ∈ data["set_r"]
-        @aux_constraint(MGE, TCO2[r],
-            TCO2[r] - sum(data["epslon"][i]*data["eind"][(i, g, r)]*data["cr"][(i, g, r)]*EN[i, g, r]
-                          for i ∈ data["set_fe"], g ∈ data["set_gnev"])
-        )
-    end
-
-    for i ∈ data["set_fe"], r ∈ data["set_r"]
-        if setting == 2
-            @aux_constraint(MGE, CTAXR[i, r],
-                PA[i, r]*sum(data["xa0a_c"][r, i, g] for g ∈ data["set_gnev"])*CTAXR[i, r]
-                - sum(data["eind"][i, g, r]*data["cr"][i, g, r] for g ∈ data["set_gnev"])*data["epslon"][i]*PC[r]*policy[r]
-            )
-        else
-            @aux_constraint(MGE, CTAXR[i,r], CTAXR[i, r] - 0.0)
-        end
-    end
-
-    for r ∈ data["set_r"]
-        if setting == 2
-            @aux_constraint(MGE, PC[r], tco2[r]*rer[r] - TCO2[r]*policy[r])
-        else
-            @aux_constraint(MGE, PC[r], PC[r] - 0)
-        end
-    end
-
-    for r ∈ data["set_r"]
-        @aux_constraint(MGE, GDP[r],
-            GDP[r]  - PW[r]*data["w0"][r]*W[r] 
-                    - data["g0"][r]*PG[r]*GDPINDEX[r]
-                    - sum(data["x0"][r, s, i]*PX[i, r, s]*X[i, r, s] for i ∈ data["set_i"], s ∈ data["set_r"])
-                    + sum(data["x0"][s, r, i]*PM[i, r]*M[i, r] for i ∈ data["set_i"], s ∈ data["set_r"])
-        )
-    end
-
-    for r ∈ data["set_r"]
-        @aux_constraint(MGE, GDPINDEX[r],
-               GDP[r]/data["gdp0"][r] - GDPINDEX[r]
-        )
-    end
-
-    # -1 is for benchmark calibration check
-    for r ∈ data["set_r"]
-        if setting == 0 || setting == -1
-            @aux_constraint(MGE, TFP[r],
-                GDP[r]  - gdp[r]
-                #TFP[r] - tfp[r]
-            )
-        else
-            @aux_constraint(MGE, TFP[r],
-                TFP[r] - tfp[r]            
-            )
-        end
-    end
-
-    fix(PU[:USA], 1)
-
+# iter = -1 is the base year, before any endowment update.
+# solve!(MGE, cumulative_iteration_limit = 0) then reports the benchmark residual.
+function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
+    iter == -1 || throw(ArgumentError(
+        "EPPA_model(data, -1) is the base-year model. Later years are solved by run_scenario.",
+    ))
+    bau = simu == 1 ? _load_bau() : nothing
+    MGE, st = build_model(data; simu)
+    simu == 1 && _install_gprod!(st, bau, YEARS[1])
     return MGE
+end
+
+function _build_model(B, simu::Integer = 0)
+    PATHSolver.c_api_License_SetString(PATH_LICENSE)
+    MGE = MPSGEModel()
+    R = REGIONS
+    I = SECTORS
+    g = B.g
+    ge = B.ge
+
+    y_na = [(i, r) for i in NOT_AENOE for r in R if g("xp0", (r, i)) > 0]
+    y_ei = [(i, r) for i in [:eint] for r in R if g("xp0", (r, i)) > 0]
+    y_ag = [(i, r) for i in AGRI for r in R if g("xp0", (r, i)) > 0]
+    y_en = [(i, r) for i in ENOE for r in R if g("xp0", (r, i)) > 0]
+    y_el = [r for r in R if g("xp0", (r, :elec)) > 0]
+    y_f = [(t, r) for t in TECH_F for r in R if ge("xp0_", (t, r)) > 0]
+    y_nhr = [(t, r) for t in TECH_NHR for r in R if ge("xp0_", (t, r)) > 0 && get(B.ffact_e, (t, r), 0.0) > 0]
+    y_n = [(t, r) for t in TECH_N for r in R if ge("xp0_", (t, r)) > 0]
+    y_t = [(t, r) for t in [:tele] for r in R if ge("xp0_", (t, r)) > 0]
+    y_arm = [(i, r) for i in I if i != :oil for r in R if B.a0[(r, i)] != 0]
+    y_m = [(i, r) for i in I if i != :oil for r in R if g("xm0", (r, i)) > 0]
+    flows = [(r, rr, i) for r in R for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0]
+    y_hm = [r for r in R if B.homm0[r] > 0]
+    y_hx = [r for r in R if B.homx0[r] > 0]
+
+    @parameter(MGE, K0[r=R], B.kapital[r])
+    @parameter(MGE, L0[r=R], B.labor[r])
+    @parameter(MGE, FF0[i=I, r=R], B.ffact[(r, i)])
+    @parameter(MGE, FFe[t=TECH_NHR, r=R], get(B.ffact_e, (t, r), 0.0))
+    @parameter(MGE, SAV[r=R], g("savf0", (r,)))
+    @parameter(MGE, GRG[r=R], B.g0[r])
+    @parameter(MGE, GDP0[r=R], B.rgdp0[r])
+    # Calibrated productivity for simu = 1. Unused while simu = 0.
+    gp0 = nothing
+    if simu == 1
+        @parameter(MGE, GP0[r=R], 1.0)
+        gp0 = GP0
+    end
+
+    @commodity(MGE, PD[i=I, r=R])
+    @commodity(MGE, PA[i=I, r=R])
+    @commodity(MGE, PHOM[r=R])
+    @commodity(MGE, PM[i=I, r=R])
+    @commodity(MGE, PDs[i=I, r=R])
+    @commodity(MGE, PDB[i=[:food, :eint], r=R])
+    @commodity(MGE, PK[r=R])
+    @commodity(MGE, PL[r=R])
+    @commodity(MGE, PF[i=I, r=R])
+    @commodity(MGE, PFr[t=TECH, r=R])
+    @commodity(MGE, PDd[r=R])
+    @commodity(MGE, PDf[t=TECH_F, r=R])
+    @commodity(MGE, PDn[t=TECH_N, r=R])
+    @commodity(MGE, PDt[r=R])
+    @commodity(MGE, PG[r=R])
+    @commodity(MGE, PINV[r=R])
+    @commodity(MGE, PT)
+    @commodity(MGE, PU[r=R])
+    @commodity(MGE, PW[r=R])
+    @commodity(MGE, PTRN[r=R])
+    @commodity(MGE, PTNn[r=R])
+    @commodity(MGE, PTNv[r=R])
+    @commodity(MGE, PTN[r=R])
+    @commodity(MGE, PTNs[r=R])
+    @commodity(MGE, PWH)
+    @commodity(MGE, PWHs[r=R])
+
+    @consumer(MGE, RA[r=R])
+    @auxiliary(MGE, gprod[r=R], lower_bound = 0, start = 1)
+    @auxiliary(MGE, rgdp[r=R], lower_bound = 0, start = B.rgdp0[r])
+
+    @sector(MGE, Yna[k=y_na])
+    @sector(MGE, Yei[k=y_ei])
+    @sector(MGE, Yag[k=y_ag])
+    @sector(MGE, Yen[k=y_en])
+    @sector(MGE, Yel[r=y_el])
+    @sector(MGE, Yef[r=R])
+    @sector(MGE, Yf[k=y_f])
+    @sector(MGE, Ynhr[k=y_nhr])
+    @sector(MGE, Yn[k=y_n])
+    @sector(MGE, Yt[k=y_t])
+    @sector(MGE, GOVT[r=R])
+    @sector(MGE, INV[r=R])
+    @sector(MGE, YT)
+    @sector(MGE, HTRN[r=R])
+    @sector(MGE, HNEW[r=R])
+    @sector(MGE, HOLD[r=R])
+    @sector(MGE, HAGG[r=R])
+    @sector(MGE, Z[r=R])
+    @sector(MGE, W[r=R])
+    @sector(MGE, A[k=y_arm])
+    @sector(MGE, IMP[k=y_m])
+    @sector(MGE, TFL[k=flows])
+    @sector(MGE, HOMM[r=y_hm])
+    @sector(MGE, HOMX[r=y_hx])
+    @sector(MGE, MQ[r=y_hm])
+
+    # --- non-energy (not aenoe): food, othr, serv, tran, dwe ---
+    for (i, r) in y_na
+        xp = g("xp0", (r, i))
+        td = B.td[(r, i)]
+        qpd = (i == :food && r != :bra) ? xp - B.tbo[r] : xp
+        qpdb = (i == :food && r != :bra) ? B.tbo[r] : 0.0
+        sigu = get(B.sigu, (i, r), 0.0)
+        es = get(B.esup, (i, r), 0.0)
+        pn = i in AGRI ? 0.7 : 0.0
+        ekl = B.elas(i, :e_kl, r)
+        lk = B.elas(i, :l_k, r)
+        noe = B.elas(i, :noe_el, r)
+        esb = get(B.esube, (i, r), 0.0)
+        @production(MGE, Yna[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=pn, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb,
+                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r], qpd, t, taxes=[Tax(RA[r], td)])
+            @output(PDB[:food, r], qpdb, t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
+                taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * (1 - B.cr(:roil, i, r)), a,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            @input(PL[r], g("labd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:lab, i, r)))], reference_price=1 + g("tf", (:lab, i, r)))
+            @input(PK[r], g("kapd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:cap, i, r)))], reference_price=1 + g("tf", (:cap, i, r)))
+            @input(PF[i, r], B.ffact[(r, i)], b)
+            [@input(PHOM[r], g("xdp0", (r, :oil, i)) + g("xmp0", (r, :oil, i)), oil,
+                taxes=[Tax(RA[r], g("ti", (:oil, i, r)))], reference_price=1 + g("ti", (:oil, i, r)))]...
+            [@input(PA[:gas, r], g("xdp0", (r, :gas, i)) + g("xmp0", (r, :gas, i)), gas,
+                taxes=[Tax(RA[r], g("ti", (:gas, i, r)))], reference_price=1 + g("ti", (:gas, i, r)))]...
+            [@input(PA[:coal, r], g("xdp0", (r, :coal, i)) + g("xmp0", (r, :coal, i)), coal,
+                taxes=[Tax(RA[r], g("ti", (:coal, i, r)))], reference_price=1 + g("ti", (:coal, i, r)))]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * B.cr(:roil, i, r), roil,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            [@input(PA[:elec, r], g("xdp0", (r, :elec, i)) + g("xmp0", (r, :elec, i)), en,
+                taxes=[Tax(RA[r], g("ti", (:elec, i, r)))], reference_price=1 + g("ti", (:elec, i, r)))]...
+        end)
+    end
+
+    # --- energy intensive (sa = 1; bra biofuel split) ---
+    for (i, r) in y_ei
+        xp = g("xp0", (r, i))
+        td = B.td[(r, i)]
+        qpd = r == :bra ? xp - B.tbo[r] : xp
+        qpdb = r == :bra ? B.tbo[r] : 0.0
+        sigu = get(B.sigu, (i, r), 0.0)
+        es = get(B.esup, (i, r), 0.0)
+        ekl = B.elas(i, :e_kl, r)
+        lk = B.elas(i, :l_k, r)
+        noe = B.elas(i, :noe_el, r)
+        esb = get(B.esube, (i, r), 0.0)
+        @production(MGE, Yei[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=0, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb,
+                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r], qpd, t, taxes=[Tax(RA[r], td)])
+            @output(PDB[:eint, r], qpdb, t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
+                taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * (1 - B.cr(:roil, i, r)), a,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            @input(PL[r], g("labd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:lab, i, r)))], reference_price=1 + g("tf", (:lab, i, r)))
+            @input(PK[r], g("kapd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:cap, i, r)))], reference_price=1 + g("tf", (:cap, i, r)))
+            @input(PF[i, r], B.ffact[(r, i)], b)
+            [@input(PHOM[r], g("xdp0", (r, :oil, i)) + g("xmp0", (r, :oil, i)), oil,
+                taxes=[Tax(RA[r], g("ti", (:oil, i, r)))], reference_price=1 + g("ti", (:oil, i, r)))]...
+            [@input(PA[:gas, r], g("xdp0", (r, :gas, i)) + g("xmp0", (r, :gas, i)), gas,
+                taxes=[Tax(RA[r], g("ti", (:gas, i, r)))], reference_price=1 + g("ti", (:gas, i, r)))]...
+            [@input(PA[:coal, r], g("xdp0", (r, :coal, i)) + g("xmp0", (r, :coal, i)), coal,
+                taxes=[Tax(RA[r], g("ti", (:coal, i, r)))], reference_price=1 + g("ti", (:coal, i, r)))]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * B.cr(:roil, i, r), roil,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            [@input(PA[:elec, r], g("xdp0", (r, :elec, i)) + g("xmp0", (r, :elec, i)), en,
+                taxes=[Tax(RA[r], g("ti", (:elec, i, r)))], reference_price=1 + g("ti", (:elec, i, r)))]...
+        end)
+    end
+
+    # --- agriculture: materials under the energy/value nest, fixed factor on fx ---
+    for (i, r) in y_ag
+        xp = g("xp0", (r, i))
+        td = B.td[(r, i)]
+        sigu = get(B.sigu, (i, r), 0.0)
+        es = get(B.esup, (i, r), 0.0)
+        ekl = B.elas(i, :e_kl, r)
+        lk = B.elas(i, :l_k, r)
+        noe = B.elas(i, :noe_el, r)
+        esb = get(B.esube, (i, r), 0.0)
+        @production(MGE, Yag[(i, r)], [t=0, s=sigu, a=>s=0.7, va=>a=lk, fx=>a=es, e=>fx=ekl, ne=>e=0, en=>e=noe, en1=>en=esb,
+                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r], xp, t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), ne,
+                taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * (1 - B.cr(:roil, i, r)), ne,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            @input(PL[r], g("labd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:lab, i, r)))], reference_price=1 + g("tf", (:lab, i, r)))
+            @input(PK[r], g("kapd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:cap, i, r)))], reference_price=1 + g("tf", (:cap, i, r)))
+            @input(PF[i, r], B.ffact[(r, i)], fx)
+            [@input(PHOM[r], g("xdp0", (r, :oil, i)) + g("xmp0", (r, :oil, i)), oil,
+                taxes=[Tax(RA[r], g("ti", (:oil, i, r)))], reference_price=1 + g("ti", (:oil, i, r)))]...
+            [@input(PA[:gas, r], g("xdp0", (r, :gas, i)) + g("xmp0", (r, :gas, i)), gas,
+                taxes=[Tax(RA[r], g("ti", (:gas, i, r)))], reference_price=1 + g("ti", (:gas, i, r)))]...
+            [@input(PA[:coal, r], g("xdp0", (r, :coal, i)) + g("xmp0", (r, :coal, i)), coal,
+                taxes=[Tax(RA[r], g("ti", (:coal, i, r)))], reference_price=1 + g("ti", (:coal, i, r)))]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * B.cr(:roil, i, r), roil,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            [@input(PA[:elec, r], g("xdp0", (r, :elec, i)) + g("xmp0", (r, :elec, i)), en,
+                taxes=[Tax(RA[r], g("ti", (:elec, i, r)))], reference_price=1 + g("ti", (:elec, i, r)))]...
+        end)
+    end
+
+    # --- coal, oil, gas, refined oil. Crude oil output is the homogeneous good. ---
+    for (i, r) in y_en
+        xp = g("xp0", (r, i))
+        td = B.td[(r, i)]
+        es = get(B.esup, (i, r), 0.0)
+        pn = 0.0
+        lk = B.elas(i, :l_k, r)
+        noe = B.elas(i, :noe_el, r)
+        esb = get(B.esube, (i, r), 0.0)
+        @production(MGE, Yen[(i, r)], [t=0, s=0, b=>s=es, a=>b=pn, va=>a=lk, en=>a=noe, en1=>en=esb,
+                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PHOM[r], i == :oil ? xp : 0.0, t, taxes=[Tax(RA[r], td)])
+            @output(PD[i, r], i == :oil ? 0.0 : xp, t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
+                taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * (1 - B.cr(:roil, i, r)), a,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            @input(PL[r], g("labd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:lab, i, r)))], reference_price=1 + g("tf", (:lab, i, r)))
+            @input(PK[r], g("kapd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:cap, i, r)))], reference_price=1 + g("tf", (:cap, i, r)))
+            @input(PF[i, r], B.ffact[(r, i)], b)
+            [@input(PHOM[r], g("xdp0", (r, :oil, i)) + g("xmp0", (r, :oil, i)), oil,
+                taxes=[Tax(RA[r], g("ti", (:oil, i, r)))], reference_price=1 + g("ti", (:oil, i, r)))]...
+            [@input(PA[:gas, r], g("xdp0", (r, :gas, i)) + g("xmp0", (r, :gas, i)), gas,
+                taxes=[Tax(RA[r], g("ti", (:gas, i, r)))], reference_price=1 + g("ti", (:gas, i, r)))]...
+            [@input(PA[:coal, r], g("xdp0", (r, :coal, i)) + g("xmp0", (r, :coal, i)), coal,
+                taxes=[Tax(RA[r], g("ti", (:coal, i, r)))], reference_price=1 + g("ti", (:coal, i, r)))]...
+            [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * B.cr(:roil, i, r), roil,
+                taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
+            [@input(PA[:elec, r], g("xdp0", (r, :elec, i)) + g("xmp0", (r, :elec, i)), en,
+                taxes=[Tax(RA[r], g("ti", (:elec, i, r)))], reference_price=1 + g("ti", (:elec, i, r)))]...
+        end)
+    end
+
+    # --- electricity aggregation and technologies ---
+    for r in y_el
+        @production(MGE, Yel[r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
+            @output(PD[:elec, r], g("xp0", (r, :elec)), t)
+            [@input(PDn[:sele, r], ge("xp0_", (:sele, r)), s001)]...
+            [@input(PDd[r], sum(ge("xp0_", (t, r)) for t in TECH_D), s011)]...
+            [@input(PDn[:wele, r], ge("xp0_", (:wele, r)), s011)]...
+            [@input(PDt[r], ge("xp0_", (:tele, r)), s)]...
+        end)
+        ekl = B.elas(:elec, :e_kl, r)
+        lk = B.elas(:elec, :l_k, r)
+        @production(MGE, Yef[r], [t=0, s=1.5], begin
+            @output(PDd[r], sum(ge("xp0_", (t, r)) for t in TECH_F), t)
+            [@input(PDf[t, r], ge("xp0_", (t, r)), s) for t in TECH_F]...
+        end)
+    end
+
+    function elec_inputs(t, r)
+        mats = [(j, get(B.elecin, (t, j, r), 0.0), get(B.elecint, (t, j, r), 0.0)) for j in NE]
+        fuels = []
+        for j in ENERGY
+            q = get(B.elecin, (t, j, r), 0.0)
+            rate = get(B.elecint, (t, j, r), 0.0)
+            if j == :roil
+                push!(fuels, (:ac, j, q * (1 - B.cr(:roil, :elec, r)), rate))
+                push!(fuels, (:curb, j, q * B.cr(:roil, :elec, r), rate))
+            else
+                push!(fuels, (:curb, j, q, rate))
+            end
+        end
+        return mats, fuels
+    end
+
+    for (t, r) in y_f
+        td = ge("td_", (r, t))
+        ekl = B.elas(:elec, :e_kl, r)
+        lk = B.elas(:elec, :l_k, r)
+        mats, fuels = elec_inputs(t, r)
+        @production(MGE, Yf[(t, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=ekl, curb=>eec=0, vac=>eec=lk], begin
+            @output(PDf[t, r], ge("xp0_", (t, r)), t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], q, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, q, rate) in mats]...
+            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+            @input(PFr[t, r], get(B.elecin, (t, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (t, :res, r), 0.0))], reference_price=1 + get(B.elecint, (t, :res, r), 0.0))
+        end)
+    end
+
+    for (t, r) in y_nhr
+        td = ge("td_", (r, t))
+        ekl = B.elas(:elec, :e_kl, r)
+        lk = B.elas(:elec, :l_k, r)
+        sig = B.nhrsigma[(t, r)]
+        mats, fuels = elec_inputs(t, r)
+        @production(MGE, Ynhr[(t, r)], [t=0, s=0, bc=>s=sig, ac=>bc=0, eec=>ac=ekl, curb=>eec=0, vac=>eec=lk], begin
+            @output(PDd[r], ge("xp0_", (t, r)), t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], q, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, q, rate) in mats]...
+            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+            @input(PFr[t, r], get(B.elecin, (t, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (t, :res, r), 0.0))], reference_price=1 + get(B.elecint, (t, :res, r), 0.0))
+        end)
+    end
+
+    for (t, r) in y_n
+        td = ge("td_", (r, t))
+        ekl = B.elas(:elec, :e_kl, r)
+        lk = B.elas(:elec, :l_k, r)
+        sig = get(B.wst, (t, r), 0.0)
+        mats, fuels = elec_inputs(t, r)
+        @production(MGE, Yn[(t, r)], [t=0, s=0, s001=>s=sig, ac=>s001=0, eec=>ac=ekl, curb=>eec=0, vac=>eec=lk], begin
+            @output(PDn[t, r], ge("xp0_", (t, r)), t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], q, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, q, rate) in mats]...
+            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+        end)
+    end
+
+    for (t, r) in y_t
+        td = ge("td_", (r, t))
+        ekl = B.elas(:elec, :e_kl, r)
+        lk = B.elas(:elec, :l_k, r)
+        mats, fuels = elec_inputs(t, r)
+        @production(MGE, Yt[(t, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=ekl, curb=>eec=0, vac=>eec=lk], begin
+            @output(PDt[r], ge("xp0_", (t, r)), t, taxes=[Tax(RA[r], td)])
+            [@input(PA[j, r], q, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, q, rate) in mats]...
+            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+        end)
+    end
+
+    for r in R
+        @production(MGE, GOVT[r], [t=0, s=0.5], begin
+            @output(PG[r], B.g0[r], t)
+            [@input(PA[i, r], i == :oil ? 0.0 : g("xdg0", (r, i)) + g("xmg0", (r, i)), s,
+                taxes=[Tax(RA[r], g("tg", (i, r)))], reference_price=g("pg0", (i, r))) for i in I]...
+            @input(PHOM[r], g("xdg0", (r, :oil)) + g("xmg0", (r, :oil)), s,
+                taxes=[Tax(RA[r], g("tg", (:oil, r)))], reference_price=g("pg0", (:oil, r)))
+        end)
+        @production(MGE, INV[r], [t=0, s=5], begin
+            @output(PINV[r], B.inv0[r], t)
+            [@input(PA[i, r], i == :oil ? 0.0 : g("xdi0", (r, i)) + g("xmi0", (r, i)), s) for i in I]...
+            @input(PHOM[r], g("xdi0", (r, :oil)) + g("xmi0", (r, :oil)), s)
+        end)
+    end
+
+    @production(MGE, YT, [t=0, s=1], begin
+        @output(PT, sum(g("vst", (:tran, r)) for r in R), t)
+        [@input(PD[:tran, r], g("vst", (:tran, r)), s) for r in R]...
+    end)
+
+    # Household transport. Identity layers with a single input are omitted;
+    # htrn buys the two conventional streams directly.
+    for r in R
+        own = B.own[r]
+        pcR = g("pc0", (:roil, r))
+        tpR = g("tp", (:roil, r))
+        foodp = r == :bra ? :eint : :food
+        tn1 = (r == :usa || r == :eur) ? 0.75 : 1.0
+        @production(MGE, HNEW[r], [t=0, s=0.1, a=>s=tn1, c=>a=0, b=>s=1], begin
+            @output(PTNn[r], HTRNS * own, t)
+            @input(PA[:roil, r], HTRNS * B.tfo[r], c, taxes=[Tax(RA[r], tpR)], reference_price=pcR)
+            @input(PDB[foodp, r], HTRNS * B.tbo[r], c, taxes=[Tax(RA[r], tpR)], reference_price=pcR)
+            @input(PA[:othr, r], HTRNS * B.toi[r] * PROPFRAC, a, taxes=[Tax(RA[r], g("tp", (:othr, r)))], reference_price=g("pc0", (:othr, r)))
+            @input(PA[:othr, r], HTRNS * B.toi[r] * (1 - PROPFRAC), b, taxes=[Tax(RA[r], g("tp", (:othr, r)))], reference_price=g("pc0", (:othr, r)))
+            @input(PA[:serv, r], HTRNS * B.tse[r], b, taxes=[Tax(RA[r], g("tp", (:serv, r)))], reference_price=g("pc0", (:serv, r)))
+        end)
+        @production(MGE, HOLD[r], [t=0, s=0], begin
+            @output(PTNv[r], (1 - HTRNS) * own, t)
+            @input(PA[:roil, r], (1 - HTRNS) * B.tfo[r], s, taxes=[Tax(RA[r], tpR)], reference_price=pcR)
+            @input(PDB[foodp, r], (1 - HTRNS) * B.tbo[r], s, taxes=[Tax(RA[r], tpR)], reference_price=pcR)
+            @input(PA[:othr, r], (1 - HTRNS) * B.toi[r], s, taxes=[Tax(RA[r], g("tp", (:othr, r)))], reference_price=g("pc0", (:othr, r)))
+            @input(PA[:serv, r], (1 - HTRNS) * B.tse[r], s, taxes=[Tax(RA[r], g("tp", (:serv, r)))], reference_price=g("pc0", (:serv, r)))
+        end)
+        @production(MGE, HAGG[r], [t=4, s=0], begin
+            @output(PTN[r], 0.2 * own, t)
+            @output(PTNs[r], 0.8 * own, t)
+            @input(PTNn[r], HTRNS * own, s)
+            @input(PTNv[r], (1 - HTRNS) * own, s)
+        end)
+        @production(MGE, HTRN[r], [t=0, s=0.2, s1=>s=4], begin
+            @output(PTRN[r], B.tottrn[r], t)
+            @input(PA[:tran, r], B.purtrn[r], s, taxes=[Tax(RA[r], g("tp", (:tran, r)))], reference_price=g("pc0", (:tran, r)))
+            @input(PTN[r], 0.2 * own, s1)
+            @input(PTNs[r], 0.8 * own, s1)
+        end)
+
+        wedge = (pcR - g("pc0", (foodp, r))) * B.tbo[r]
+        delas = get(B.delas, (r,), 0.0)
+        noe = B.elas(:hh, :noe_el, r)
+        @production(MGE, Z[r], [t=0, s=0.5, u=>s=0.25, a=>u=delas, dw=>u=0.3, en=>dw=noe,
+                oil=>en=0, gas=>en=0, coal=>en=0, roil=>en=0, elec=>en=0], begin
+            @output(PU[r], g("cons0", (r,)) + wedge, t)
+            @input(PTRN[r], B.tottrn[r], s)
+            [@input(PA[i, r], max(get(B.xdc, (r, i), 0.0) + g("xmc0", (r, i)), 0.0), a,
+                taxes=[Tax(RA[r], g("tp", (i, r)))], reference_price=g("pc0", (i, r))) for i in NENDT]...
+            [@input(PA[:dwe, r], max(get(B.xdc, (r, :dwe), 0.0) + g("xmc0", (r, :dwe)), 0.0), dw,
+                taxes=[Tax(RA[r], g("tp", (:dwe, r)))], reference_price=g("pc0", (:dwe, r)))]...
+            @input(PHOM[r], max(B.ence[(:oil, r)], 0.0), oil, taxes=[Tax(RA[r], g("tp", (:oil, r)))], reference_price=g("pc0", (:oil, r)))
+            @input(PA[:gas, r], max(B.ence[(:gas, r)], 0.0), gas, taxes=[Tax(RA[r], g("tp", (:gas, r)))], reference_price=g("pc0", (:gas, r)))
+            @input(PA[:coal, r], max(B.ence[(:coal, r)], 0.0), coal, taxes=[Tax(RA[r], g("tp", (:coal, r)))], reference_price=g("pc0", (:coal, r)))
+            @input(PA[:roil, r], max(B.ence[(:roil, r)], 0.0), roil, taxes=[Tax(RA[r], g("tp", (:roil, r)))], reference_price=g("pc0", (:roil, r)))
+            @input(PA[:elec, r], max(B.ence[(:elec, r)], 0.0), elec, taxes=[Tax(RA[r], g("tp", (:elec, r)))], reference_price=g("pc0", (:elec, r)))
+        end)
+        @production(MGE, W[r], [t=0, s=0], begin
+            @output(PW[r], g("cons0", (r,)) + B.inv0[r] + wedge, t)
+            @input(PU[r], g("cons0", (r,)) + wedge, s)
+            @input(PINV[r], B.inv0[r], s)
+        end)
+    end
+
+    for (i, r) in y_arm
+        qout = B.a0[(r, i)]
+        qdom = B.d0[(r, i)]
+        if (i == :food && r != :bra) || (i == :eint && r == :bra)
+            qout -= B.tbo[r]
+            qdom -= B.tbo[r]
+        end
+        sdm = B.elas(i, :sdm, r)
+        @production(MGE, A[(i, r)], [t=0, s=sdm], begin
+            @output(PA[i, r], qout, t)
+            @input(PD[i, r], qdom, s)
+            @input(PM[i, r], g("xm0", (r, i)), s)
+        end)
+    end
+
+    for (i, r) in y_m
+        smm = B.elas(i, :smm, r)
+        @production(MGE, IMP[(i, r)], [t=0, s=smm, src[rr=R]=>s=0], begin
+            @output(PM[i, r], g("xm0", (r, i)), t)
+            [@input(PDs[i, rr], g("wtflow0", (r, rr, i)), src[rr],
+                taxes=[Tax(RA[rr], g("tx", (i, rr, r))), Tax(RA[r], g("tm", (i, rr, r)) * (1 + g("tx", (i, rr, r))))],
+                reference_price=(1 + g("tx", (i, rr, r))) * (1 + g("tm", (i, rr, r)))) for rr in R]...
+            [@input(PT, sum(g("vtwr", (j, i, rr, r)) for j in I), src[rr],
+                taxes=[Tax(RA[r], g("tm", (i, rr, r)))], reference_price=1 + g("tm", (i, rr, r))) for rr in R]...
+        end)
+    end
+
+    for (r, rr, i) in flows
+        @production(MGE, TFL[(r, rr, i)], [t=0, s=0], begin
+            @output(PDs[i, rr], g("wtflow0", (r, rr, i)), t)
+            @input(PD[i, rr], g("wtflow0", (r, rr, i)), s)
+        end)
+    end
+
+    for r in y_hm
+        @production(MGE, HOMM[r], [t=0, s=0], begin
+            @output(PHOM[r], B.vhomm0[r], t)
+            @input(PWHs[r], B.homm0[r], s, taxes=[Tax(RA[r], B.tmhom[r])])
+            @input(PT, B.homt0[r], s, taxes=[Tax(RA[r], B.tmhom[r])])
+        end)
+        @production(MGE, MQ[r], [t=0, s=0], begin
+            @output(PWHs[r], B.homm0[r], t)
+            @input(PWH, B.homm0[r], s)
+        end)
+    end
+    for r in y_hx
+        @production(MGE, HOMX[r], [t=0, s=0], begin
+            @output(PWH, B.homx0[r], t)
+            @input(PHOM[r], B.vhomx0[r], s, taxes=[Tax(RA[r], B.txhom[r])])
+        end)
+    end
+
+    for r in R
+        @demand(MGE, RA[r], begin
+            @final_demand(PW[r], g("cons0", (r,)) + B.inv0[r])
+            @endowment(PK[r], K0[r] * gprod[r])
+            @endowment(PL[r], L0[r] * gprod[r])
+            [@endowment(PF[i, r], (i in FF ? 1.0 : gprod[r]) * FF0[i, r]) for i in I]...
+            [@endowment(PFr[t, r], 1.0 * FFe[t, r]) for t in TECH_NHR]...
+            @endowment(PU[:usa], 1.0 * SAV[r])
+            @endowment(PG[r], -GRG[r])
+            @endowment(PHOM[r], B.homadj[r])
+            @endowment(PT, B.trnadj[r])
+        end)
+    end
+
+    for r in R
+        ex = sum((1 + g("tx", (i, r, rr))) * PD[i, r] * TFL[(rr, r, i)] * g("wtflow0", (rr, r, i))
+                 for rr in R for i in I if i != :oil && g("wtflow0", (rr, r, i)) > 0; init=0)
+        im = sum((1 + g("tx", (i, rr, r))) * PD[i, rr] * TFL[(r, rr, i)] * g("wtflow0", (r, rr, i))
+                 for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0; init=0)
+        hx = B.homx0[r] > 0 ? PWH * B.homx0[r] * HOMX[r] : 0
+        hm = B.homm0[r] > 0 ? PWH * B.homm0[r] * MQ[r] : 0
+        @aux_constraint(MGE, rgdp[r],
+            PU[r] * rgdp[r] - (PU[r] * g("cons0", (r,)) * Z[r] + B.inv0[r] * PINV[r] * INV[r] + B.g0[r] * PG[r] * GOVT[r] + ex - im + hx - hm))
+        # simu = 0: gprod meets the GDP target. simu = 1: gprod is the calibrated value.
+        if simu == 0
+            @aux_constraint(MGE, gprod[r], rgdp[r] - GDP0[r])
+        else
+            @aux_constraint(MGE, gprod[r], gprod[r] - GP0[r])
+        end
+    end
+
+    fix(PU[:usa], 1.0)
+    state = (; MGE, R, K0, L0, SAV, GRG, GDP0, gprod, rgdp, GP0 = gp0, simu,
+        kapital0 = copy(B.kapital), labor0 = copy(B.labor),
+        labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
+        inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())
+    srve0 = (1 - DPE)^regular_step()
+    for r in R
+        state.scale[r] = (state.kapital0[r] - state.kapital0[r] * srve0) / (0.95 * ROR * state.inv0[r])
+    end
+    return MGE, state
 end
