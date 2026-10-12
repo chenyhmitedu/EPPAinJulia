@@ -3,6 +3,16 @@
 # is NaN once a price sits on its bound and calibration dies after 2060.
 const _smooth_announced = Ref(false)
 
+#=
+1.  MPSGE (in GAMS) does keep a zero price from becoming NaN, but not by smoothing. Before it evaluates p^(1−σ), 
+    it treats a zero price as a corner: if the elasticity is above 1, that input takes the whole nest and 
+    the unit cost is zero. There is no added constant, so at benchmark prices the function is exactly the CES, 
+    not a CES shifted by 1e-8."
+2.  MPSGE.jl never checks for a zero price. See 6:12:/root/.julia/packages/MPSGE/JU5Bn/src/cost_function.jl    
+3.  apply_smooth! replaces each price p by a nearby function that stays positive: 0.5 * (p + sqrt(p² + 1e-8))
+4.  With apply_smooth!, there's no need to set lower bounds for prices.
+=#
+
 function apply_smooth!()
     @eval MPSGE begin
         function _soft(x)
