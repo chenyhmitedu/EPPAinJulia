@@ -154,12 +154,10 @@ function _build_model(B, simu::Integer = 0)
         lk = B.elas(i, :l_k, r)
         noe = B.elas(i, :noe_el, r)
         esb = get(B.esube, (i, r), 0.0)
-        @production(MGE, Yna[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=pn, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb,
-                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, Yna[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=pn, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r], qpd, t, taxes=[Tax(RA[r], td)])
             @output(PDB[:food, r], qpdb, t, taxes=[Tax(RA[r], td)])
-            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
-                taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
+            [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a, taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
             [@input(PA[:roil, r], (g("xdp0", (r, :roil, i)) + g("xmp0", (r, :roil, i))) * (1 - B.cr(:roil, i, r)), a,
                 taxes=[Tax(RA[r], g("ti", (:roil, i, r)))], reference_price=1 + g("ti", (:roil, i, r)))]...
             @input(PL[r], g("labd0", (r, i)), va, taxes=[Tax(RA[r], g("tf", (:lab, i, r)))], reference_price=1 + g("tf", (:lab, i, r)))
@@ -189,8 +187,7 @@ function _build_model(B, simu::Integer = 0)
         lk = B.elas(i, :l_k, r)
         noe = B.elas(i, :noe_el, r)
         esb = get(B.esube, (i, r), 0.0)
-        @production(MGE, Yei[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=0, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb,
-                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, Yei[(i, r)], [t=2, s=sigu, b=>s=es, a=>b=0, ee=>a=ekl, va=>ee=lk, en=>ee=noe, en1=>en=esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r], qpd, t, taxes=[Tax(RA[r], td)])
             @output(PDB[:eint, r], qpdb, t, taxes=[Tax(RA[r], td)])
             [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
@@ -222,8 +219,7 @@ function _build_model(B, simu::Integer = 0)
         lk = B.elas(i, :l_k, r)
         noe = B.elas(i, :noe_el, r)
         esb = get(B.esube, (i, r), 0.0)
-        @production(MGE, Yag[(i, r)], [t=0, s=sigu, a=>s=0.7, va=>a=lk, fx=>a=es, e=>fx=ekl, ne=>e=0, en=>e=noe, en1=>en=esb,
-                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, Yag[(i, r)], [t=0, s=sigu, a=>s=0.7, va=>a=lk, fx=>a=es, e=>fx=ekl, ne=>e=0, en=>e=noe, en1=>en=esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r], xp, t, taxes=[Tax(RA[r], td)])
             [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), ne,
                 taxes=[Tax(RA[r], g("ti", (j, i, r)))], reference_price=1 + g("ti", (j, i, r))) for j in NE]...
@@ -253,8 +249,7 @@ function _build_model(B, simu::Integer = 0)
         lk = B.elas(i, :l_k, r)
         noe = B.elas(i, :noe_el, r)
         esb = get(B.esube, (i, r), 0.0)
-        @production(MGE, Yen[(i, r)], [t=0, s=0, b=>s=es, a=>b=pn, va=>a=lk, en=>a=noe, en1=>en=esb,
-                oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, Yen[(i, r)], [t=0, s=0, b=>s=es, a=>b=pn, va=>a=lk, en=>a=noe, en1=>en=esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PHOM[r], i == :oil ? xp : 0.0, t, taxes=[Tax(RA[r], td)])
             @output(PD[i, r], i == :oil ? 0.0 : xp, t, taxes=[Tax(RA[r], td)])
             [@input(PA[j, r], g("xdp0", (r, j, i)) + g("xmp0", (r, j, i)), a,
@@ -446,8 +441,7 @@ function _build_model(B, simu::Integer = 0)
         wedge = (pcR - g("pc0", (foodp, r))) * B.tbo[r]
         delas = get(B.delas, (r,), 0.0)
         noe = B.elas(:hh, :noe_el, r)
-        @production(MGE, Z[r], [t=0, s=0.5, u=>s=0.25, a=>u=delas, dw=>u=0.3, en=>dw=noe,
-                oil=>en=0, gas=>en=0, coal=>en=0, roil=>en=0, elec=>en=0], begin
+        @production(MGE, Z[r], [t=0, s=0.5, u=>s=0.25, a=>u=delas, dw=>u=0.3, en=>dw=noe, oil=>en=0, gas=>en=0, coal=>en=0, roil=>en=0, elec=>en=0], begin
             @output(PU[r], g("cons0", (r,)) + wedge, t)
             @input(PTRN[r], B.tottrn[r], s)
             [@input(PA[i, r], max(get(B.xdc, (r, i), 0.0) + g("xmc0", (r, i)), 0.0), a,
