@@ -1,5 +1,8 @@
-# Readers for the GAMS parameter dump and the xls2gms tables used by this run.
+"""
+    load_years(path)
 
+Read the solve periods from a text file. Blank lines and lines that start with `*` or `#` are ignored.
+"""
 function load_years(path)
     years = Int[]
     for ln in eachline(path)
@@ -14,14 +17,22 @@ end
 
 const YEARS = load_years(normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
 
-# Years between period i and the next period.
+"""
+    step_years(i::Integer)
+
+Years between period `i` and the next period.
+"""
 function step_years(i::Integer)
     1 <= i < length(YEARS) || error("period $i has no following year")
     return YEARS[i + 1] - YEARS[i]
 end
 
-# Length of a normal step, after the short opening step. Benchmark capital
-# survival uses this, as srve(r,"t0") does in EPPA.
+"""
+    regular_step()
+
+Length of a normal step, after the short opening step. Benchmark capital
+survival uses this, as `srve(r,"t0")` does in EPPA.
+"""
 function regular_step()
     return length(YEARS) >= 3 ? step_years(2) : step_years(1)
 end
@@ -67,7 +78,11 @@ function getp(parms, name, key)
     get(parms[name], key, 0.0)
 end
 
-"""Parse an xls2gms `table` whose rows are `%tNNN%` and whose header is region names."""
+"""
+    load_t_table(path)
+
+Parse an xls2gms `table` whose rows are `%tNNN%` and whose header is region names.
+"""
 function load_t_table(path)
     lines = readlines(path)
     body = String[]
@@ -117,12 +132,18 @@ function load_benchmark(dat_path, extracted_dir)
     return (; p, regions, sectors, hist, ann, pop)
 end
 
+"""
+    growth_factor(data, r, year)
+
+Exogenous GDP growth applied when leaving `year`.
+
+The opening step uses the historical index over the actual gap. The second
+period still uses that index. Later periods use the annual growth rate. Both
+of the latter are compounded over a normal step.
+"""
 function growth_factor(data, r, year)
     i = findfirst(==(year), YEARS)
     i === nothing && error("year $year is not an EPPA period")
-    # Opening step uses the historical index over the actual gap.
-    # The second period still uses that index, then annual rates, both
-    # compounded over a normal step.
     if i == 1
         return data.hist[(tcode(year), r)]^step_years(1)
     elseif i == 2

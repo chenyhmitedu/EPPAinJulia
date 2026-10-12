@@ -1,16 +1,24 @@
-# Active EPPA8 blocks: production by nest class, electricity technologies,
-# Armington and bilateral trade, homogeneous oil, household transport,
-# welfare, and the gprod/rgdp closure. No vintage, backstops, land use,
-# Stone-Geary, or emissions commodities.
+"""
+    build_model(B; simu::Integer = 0)
 
+Build the MPSGE model for benchmark `B`.
+
+New methods are invisible to the call frame that loaded this file, so the model
+is rebuilt with `Base.invokelatest`.
+"""
 function build_model(B; simu::Integer = 0)
-    # New methods are invisible to this call frame. Rebuild in the latest world.
     apply_smooth!()
     return Base.invokelatest(_build_model, B, Int(simu))
 end
 
-# iter = -1 is the base year, before any endowment update.
-# solve!(MGE, cumulative_iteration_limit = 0) then reports the benchmark residual.
+"""
+    EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
+
+Base-year model, before any endowment update.
+
+`iter` must be `-1`. `solve!(MGE; cumulative_iteration_limit = 0)` then reports
+the benchmark residual. Later years are solved by [`run_scenario`](@ref).
+"""
 function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
     iter == -1 || throw(ArgumentError(
         "EPPA_model(data, -1) is the base-year model. Later years are solved by run_scenario.",
@@ -21,6 +29,26 @@ function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
     return MGE
 end
 
+"""
+    _build_model(B, simu::Integer = 0)
+
+Declare the active EPPA blocks.
+
+Production is split by nest class:
+
+  - non-energy (`not aenoe`): food, othr, serv, tran, dwe
+  - energy intensive (`sa = 1`, with the Brazil biofuel split)
+  - agriculture: materials sit under the energy/value nest, and the fixed factor is on `fx`
+  - coal, oil, gas, and refined oil; crude oil output is the homogeneous good
+  - electricity aggregation and technologies
+
+Household transport omits identity layers that have a single input. `htrn` buys
+the two conventional streams directly.
+
+`GP0` is the calibrated productivity used when `simu = 1`. It is not created
+when `simu = 0`. In that case `gprod` meets the GDP target. When `simu = 1`,
+`gprod` is held at the calibrated value.
+"""
 function _build_model(B, simu::Integer = 0)
     PATHSolver.c_api_License_SetString(PATH_LICENSE)
     MGE = MPSGEModel()
@@ -51,7 +79,6 @@ function _build_model(B, simu::Integer = 0)
     @parameter(MGE, SAV[r=R], g("savf0", (r,)))
     @parameter(MGE, GRG[r=R], B.g0[r])
     @parameter(MGE, GDP0[r=R], B.rgdp0[r])
-    # Calibrated productivity for simu = 1. Unused while simu = 0.
     gp0 = nothing
     if simu == 1
         @parameter(MGE, GP0[r=R], 1.0)
@@ -115,7 +142,6 @@ function _build_model(B, simu::Integer = 0)
     @sector(MGE, HOMX[r=y_hx])
     @sector(MGE, MQ[r=y_hm])
 
-    # --- non-energy (not aenoe): food, othr, serv, tran, dwe ---
     for (i, r) in y_na
         xp = g("xp0", (r, i))
         td = B.td[(r, i)]
@@ -152,7 +178,6 @@ function _build_model(B, simu::Integer = 0)
         end)
     end
 
-    # --- energy intensive (sa = 1; bra biofuel split) ---
     for (i, r) in y_ei
         xp = g("xp0", (r, i))
         td = B.td[(r, i)]
@@ -188,7 +213,6 @@ function _build_model(B, simu::Integer = 0)
         end)
     end
 
-    # --- agriculture: materials under the energy/value nest, fixed factor on fx ---
     for (i, r) in y_ag
         xp = g("xp0", (r, i))
         td = B.td[(r, i)]
@@ -221,7 +245,6 @@ function _build_model(B, simu::Integer = 0)
         end)
     end
 
-    # --- coal, oil, gas, refined oil. Crude oil output is the homogeneous good. ---
     for (i, r) in y_en
         xp = g("xp0", (r, i))
         td = B.td[(r, i)]
@@ -254,7 +277,6 @@ function _build_model(B, simu::Integer = 0)
         end)
     end
 
-    # --- electricity aggregation and technologies ---
     for r in y_el
         @production(MGE, Yel[r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
             @output(PD[:elec, r], g("xp0", (r, :elec)), t)
@@ -387,8 +409,6 @@ function _build_model(B, simu::Integer = 0)
         [@input(PD[:tran, r], g("vst", (:tran, r)), s) for r in R]...
     end)
 
-    # Household transport. Identity layers with a single input are omitted;
-    # htrn buys the two conventional streams directly.
     for r in R
         own = B.own[r]
         pcR = g("pc0", (:roil, r))
@@ -522,7 +542,6 @@ function _build_model(B, simu::Integer = 0)
         hm = B.homm0[r] > 0 ? PWH * B.homm0[r] * MQ[r] : 0
         @aux_constraint(MGE, rgdp[r],
             PU[r] * rgdp[r] - (PU[r] * g("cons0", (r,)) * Z[r] + B.inv0[r] * PINV[r] * INV[r] + B.g0[r] * PG[r] * GOVT[r] + ex - im + hx - hm))
-        # simu = 0: gprod meets the GDP target. simu = 1: gprod is the calibrated value.
         if simu == 0
             @aux_constraint(MGE, gprod[r], rgdp[r] - GDP0[r])
         else

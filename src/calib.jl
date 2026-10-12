@@ -1,8 +1,3 @@
-# Benchmark accounts for the active v-ref structure.
-# Vintage, backstops, land-use change, Stone-Geary and emissions are off.
-# Emission pass-through nests are identities at a zero carbon price, so energy
-# inputs use pa (phom for crude oil) directly.
-
 const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
 const SECTORS = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
 const NE = [:crop, :live, :fors, :food, :eint, :othr, :serv, :tran, :dwe]
@@ -85,6 +80,22 @@ function load_assigns(path)
     return data
 end
 
+"""
+    prepare(dat_path, elec_path, extracted)
+
+Build the benchmark accounts for the active v-ref structure.
+
+Vintage capital, backstops, land-use change, Stone-Geary preferences, and
+emissions are off. Emission pass-through nests are identities at a zero carbon
+price, so energy inputs use `pa` (`phom` for crude oil) directly.
+
+The `(sector, layer, region)` elasticity `noe_el` is tripled, as in `eppaelas.gms`.
+The land tax is capitalized into the fixed-factor quantity, as in `eppaparm`.
+Household transport is extracted from final demand, as in `eppacalib`. Crude oil
+is treated as one homogeneous good; gas is not. The electricity resource split
+follows `elecpower.gms` and rewrites local copies of `elecin`. A production
+identity is checked for the non-electricity GTAP sectors.
+"""
 function prepare(dat_path, elec_path, extracted)
     wanted = Set([
         "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
@@ -100,7 +111,6 @@ function prepare(dat_path, elec_path, extracted)
 
     selas = load_gms_table(joinpath(extracted, "parameters_eppaelas_selas.inc"))
     for (k, v) in selas
-        # (sector, layer, region); noe_el is tripled in eppaelas.gms
         if length(k) == 3 && k[2] == :noe_el
             selas[k] = 3v
         end
@@ -135,7 +145,6 @@ function prepare(dat_path, elec_path, extracted)
     elas(g, layer, r) = get(selas, (g, layer, r), 0.0)
     cr(i, g, r) = i == :roil ? get(crtable, (g, r), 0.0) : 1.0
 
-    # Land tax is capitalized into the fixed-factor quantity (eppaparm).
     ffact = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS, i in SECTORS
         ffact[(r, i)] = g("ffactd0", (r, i)) * (1 + g("tf", (:lnd, i, r)))
@@ -158,7 +167,6 @@ function prepare(dat_path, elec_path, extracted)
         end
     end
 
-    # Household transport extraction (eppacalib), applied to copies of final demand.
     xdc = Dict(k => v for (k, v) in p["xdc0"])
     xmc = Dict(k => v for (k, v) in p["xmc0"])
     purtrn = Dict{Symbol,Float64}()
@@ -196,7 +204,6 @@ function prepare(dat_path, elec_path, extracted)
         ence[(:roil, r)] -= tfo[r]
     end
 
-    # Homogeneous crude oil (eppacalib). Gas is not in X.
     homm0 = Dict{Symbol,Float64}()
     homx0 = Dict{Symbol,Float64}()
     homt0 = Dict{Symbol,Float64}()
@@ -225,7 +232,6 @@ function prepare(dat_path, elec_path, extracted)
         trnadj[r] = homt0[r] - marg
     end
 
-    # Electricity resource split (elecpower.gms). Mutates local copies of elecin.
     elecin = Dict(k => v for (k, v) in e["elecin"])
     elecint = Dict(k => v for (k, v) in e["elecint"])
     ffact_e = Dict{Tuple{Symbol,Symbol},Float64}()
@@ -284,7 +290,6 @@ function prepare(dat_path, elec_path, extracted)
         rgdp0[r] = g("cons0", (r,)) + inv0[r] + g0[r] + exports - imports + homx0[r] - homm0[r]
     end
 
-    # Production identity check (non-electricity GTAP sectors).
     gap = 0.0
     for r in REGIONS, i in SECTORS
         i == :elec && continue

@@ -1,3 +1,19 @@
+"""
+    EPPAinJulia
+
+Recursive-dynamic MPSGE model of EPPA.
+
+Active blocks are production by nest class, electricity technologies, Armington
+and bilateral trade, homogeneous oil, household transport, welfare, and the
+`gprod` / `rgdp` closure. Vintage capital, backstops, land use, Stone-Geary
+preferences, and emissions commodities are off.
+
+Benchmark accounts follow the active v-ref structure. Emission pass-through
+nests are identities at a zero carbon price, so energy inputs use `pa` (`phom`
+for crude oil) directly.
+
+Data readers parse the GAMS parameter dump and the xls2gms tables used by a run.
+"""
 module EPPAinJulia
 
 using JuMP
