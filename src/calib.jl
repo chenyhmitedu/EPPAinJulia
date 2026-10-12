@@ -105,6 +105,14 @@ function prepare(dat_path, elec_path, extracted)
         "efd", "savh0",
     ])
     p = load_gams_dat(dat_path, wanted)
+    xa0 = Dict{Tuple,Float64}()
+    for (key, v) in p["xdp0"]
+        xa0[key] = v
+    end
+    for (key, v) in p["xmp0"]
+        xa0[key] = get(xa0, key, 0.0) + v
+    end
+    p["xa0"] = xa0
     e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_"]))
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
@@ -299,7 +307,7 @@ function prepare(dat_path, elec_path, extracted)
         cost += g("labd0", (r, i)) * (1 + g("tf", (:lab, i, r)))
         cost += g("kapd0", (r, i)) * (1 + g("tf", (:cap, i, r)))
         for j in SECTORS
-            cost += (g("xdp0", (r, j, i)) + g("xmp0", (r, j, i))) * (1 + g("ti", (j, i, r)))
+            cost += g("xa0", (r, j, i)) * (1 + g("ti", (j, i, r)))
         end
         gap = max(gap, abs(xp - g("ptxy0", (r, i)) - cost))
     end
