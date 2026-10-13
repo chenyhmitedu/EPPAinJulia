@@ -28,6 +28,7 @@ const MOI = JuMP.MOI
 
 include("load.jl")
 include("calib.jl")
+include("nests.jl")
 include("smooth.jl")
 include("eppacore.jl")
 
