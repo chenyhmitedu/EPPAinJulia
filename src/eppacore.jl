@@ -61,7 +61,7 @@ function _build_model(B, simu::Integer = 0)
     @parameter(MGE, K0[r=R], B.kapital[r])
     @parameter(MGE, L0[r=R], B.labor[r])
     @parameter(MGE, FF0[i=I, r=R], B.ffact[(r, i)])
-    @parameter(MGE, FFe[t=TECH_NHR, r=R], get(B.ffact_e, (t, r), 0.0))
+    @parameter(MGE, FFe[i_=TECH_NHR, r=R], get(B.ffact_e, (i_, r), 0.0))
     @parameter(MGE, SAV[r=R], g("savf0", (r,)))
     @parameter(MGE, GRG[r=R], B.g0[r])
     @parameter(MGE, GDP0[r=R], B.rgdp0[r])
@@ -80,10 +80,10 @@ function _build_model(B, simu::Integer = 0)
     @commodity(MGE, PK[r=R])
     @commodity(MGE, PL[r=R])
     @commodity(MGE, PF[i=I, r=R])
-    @commodity(MGE, PFr[t=TECH, r=R])
+    @commodity(MGE, PFr[i_=TECH, r=R])
     @commodity(MGE, PDd[r=R])
-    @commodity(MGE, PDf[t=TECH_F, r=R])
-    @commodity(MGE, PDn[t=TECH_N, r=R])
+    @commodity(MGE, PDf[i_=TECH_F, r=R])
+    @commodity(MGE, PDn[i_=TECH_N, r=R])
     @commodity(MGE, PDt[r=R])
     @commodity(MGE, PG[r=R])
     @commodity(MGE, PINV[r=R])
@@ -203,79 +203,79 @@ function _build_model(B, simu::Integer = 0)
         @production(MGE, Yel[r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
             @output(PD[:elec, r], g("xp0", (r, :elec)), t)
             [@input(PDn[:sele, r], ge("xp0_", (:sele, r)), s001)]...
-            [@input(PDd[r], sum(ge("xp0_", (t, r)) for t in TECH_D), s011)]...
+            [@input(PDd[r], sum(ge("xp0_", (i_, r)) for i_ in TECH_D), s011)]...
             [@input(PDn[:wele, r], ge("xp0_", (:wele, r)), s011)]...
             [@input(PDt[r], ge("xp0_", (:tele, r)), s)]...
         end)
         @production(MGE, Yef[r], [t=0, s=1.5], begin
-            @output(PDd[r], sum(ge("xp0_", (t, r)) for t in TECH_F), t)
-            [@input(PDf[t, r], ge("xp0_", (t, r)), s) for t in TECH_F]...
+            @output(PDd[r], sum(ge("xp0_", (i_, r)) for i_ in TECH_F), t)
+            [@input(PDf[i_, r], ge("xp0_", (i_, r)), s) for i_ in TECH_F]...
         end)
     end
 
-    for (t, r) in y_f
-        q = tech_block(B, t, r)
-        @production(MGE, Yf[(t, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDf[t, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+    for (i_, r) in y_f
+        q = tech_block(B, i_, r)
+        @production(MGE, Yf[(i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
+            @output(PDf[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
-            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
-            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
-            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
-            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
-            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
-            @input(PFr[t, r], get(B.elecin, (t, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (t, :res, r), 0.0))], reference_price=1 + get(B.elecint, (t, :res, r), 0.0))
+            @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (i_, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (i_, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (i_, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (i_, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :cap, r), 0.0))
+            @input(PFr[i_, r], get(B.elecin, (i_, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (i_, :res, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :res, r), 0.0))
         end)
     end
 
-    for (t, r) in y_nhr
-        q = nhr_block(B, t, r)
-        @production(MGE, Ynhr[(t, r)], [t=0, s=0, bc=>s=q.sig, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
+    for (i_, r) in y_nhr
+        q = nhr_block(B, i_, r)
+        @production(MGE, Ynhr[(i_, r)], [t=0, s=0, bc=>s=q.sig, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
             @output(PDd[r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
-            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
-            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
-            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
-            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
-            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
-            @input(PFr[t, r], get(B.elecin, (t, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (t, :res, r), 0.0))], reference_price=1 + get(B.elecint, (t, :res, r), 0.0))
+            @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (i_, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (i_, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (i_, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (i_, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :cap, r), 0.0))
+            @input(PFr[i_, r], get(B.elecin, (i_, :res, r), 0.0), bc, taxes=[Tax(RA[r], get(B.elecint, (i_, :res, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :res, r), 0.0))
         end)
     end
 
-    for (t, r) in y_n
-        q = renewable_block(B, t, r)
-        @production(MGE, Yn[(t, r)], [t=0, s=0, s001=>s=q.sig, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDn[t, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+    for (i_, r) in y_n
+        q = renewable_block(B, i_, r)
+        @production(MGE, Yn[(i_, r)], [t=0, s=0, s001=>s=q.sig, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
+            @output(PDn[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
-            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
-            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
-            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
-            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
-            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+            @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (i_, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (i_, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (i_, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (i_, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :cap, r), 0.0))
         end)
     end
 
-    for (t, r) in y_t
-        q = tech_block(B, t, r)
-        @production(MGE, Yt[(t, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
+    for (i_, r) in y_t
+        q = tech_block(B, i_, r)
+        @production(MGE, Yt[(i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
             @output(PDt[r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
-            @input(PHOM[r], get(B.elecin, (t, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :oil, r), 0.0))
-            @input(PA[:gas, r], get(B.elecin, (t, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (t, :gas, r), 0.0))
-            @input(PA[:coal, r], get(B.elecin, (t, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (t, :coal, r), 0.0))
-            @input(PA[:elec, r], get(B.elecin, (t, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (t, :elec, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PA[:roil, r], get(B.elecin, (t, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (t, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (t, :roil, r), 0.0))
-            @input(PL[r], get(B.elecin, (t, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (t, :lab, r), 0.0))
-            @input(PK[r], get(B.elecin, (t, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (t, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (t, :cap, r), 0.0))
+            @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
+            @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
+            @input(PA[:coal, r], get(B.elecin, (i_, :coal, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :coal, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :coal, r), 0.0))
+            @input(PA[:elec, r], get(B.elecin, (i_, :elec, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :elec, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :elec, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * (1 - B.cr(:roil, :elec, r)), ac, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PA[:roil, r], get(B.elecin, (i_, :roil, r), 0.0) * B.cr(:roil, :elec, r), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :roil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :roil, r), 0.0))
+            @input(PL[r], get(B.elecin, (i_, :lab, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :lab, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :lab, r), 0.0))
+            @input(PK[r], get(B.elecin, (i_, :cap, r), 0.0), vac, taxes=[Tax(RA[r], get(B.elecint, (i_, :cap, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :cap, r), 0.0))
         end)
     end
 
@@ -393,7 +393,7 @@ function _build_model(B, simu::Integer = 0)
             @endowment(PK[r], K0[r] * gprod[r])
             @endowment(PL[r], L0[r] * gprod[r])
             [@endowment(PF[i, r], (i in FF ? 1.0 : gprod[r]) * FF0[i, r]) for i in I]...
-            [@endowment(PFr[t, r], 1.0 * FFe[t, r]) for t in TECH_NHR]...
+            [@endowment(PFr[i_, r], 1.0 * FFe[i_, r]) for i_ in TECH_NHR]...
             @endowment(PU[:usa], 1.0 * SAV[r])
             @endowment(PG[r], -GRG[r])
             @endowment(PHOM[r], B.homadj[r])
@@ -428,3 +428,5 @@ function _build_model(B, simu::Integer = 0)
     end
     return MGE, state
 end
+
+
