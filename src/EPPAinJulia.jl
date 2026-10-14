@@ -5,7 +5,7 @@ Recursive-dynamic MPSGE model of EPPA.
 
 Active blocks are production by nest class, electricity technologies, Armington
 and bilateral trade, homogeneous oil, household transport, welfare, and the
-`gprod` / `rgdp` closure. Vintage capital, backstops, land use, Stone-Geary
+`GPROD` / `RGDP` closure. Vintage capital, backstops, land use, Stone-Geary
 preferences, and emissions commodities are off.
 
 Benchmark accounts follow the active v-ref structure. Emission pass-through
@@ -150,8 +150,8 @@ end
 function _gdp_gap(st)
     gap = 0.0
     for r in st.R
-        tg = _level(st.GDP0[r])
-        rg = _level(st.rgdp[r])
+        tg = _level(st.gdp0[r])
+        rg = _level(st.RGDP[r])
         (isfinite(tg) && isfinite(rg) && tg != 0) || return Inf
         gap = max(gap, abs(rg / tg - 1))
     end
@@ -163,18 +163,18 @@ function _targets(MGE, st, data, year, next)
     out = Dict{Symbol,NamedTuple}()
     for r in st.R
         inv_level = max(_level(MGE[:INV][r]), 0.0)
-        knew = st.scale[r] * ROR * st.inv0[r] * inv_level * _boost(r, ord) + _level(st.K0[r]) * _srve(year)
+        knew = st.scale[r] * ROR * st.inv0[r] * inv_level * _boost(r, ord) + _level(st.k0[r]) * _srve(year)
         out[r] = (
-            K = _level(st.K0[r]),
-            L = _level(st.L0[r]),
-            G = _level(st.GDP0[r]),
-            Rgov = _level(st.GRG[r]),
-            S = _level(st.SAV[r]),
+            K = _level(st.k0[r]),
+            L = _level(st.l0[r]),
+            G = _level(st.gdp0[r]),
+            Rgov = _level(st.grg[r]),
+            S = _level(st.sav[r]),
             Kn = max(knew, 1e-8),
-            Ln = max(_level(st.L0[r]) * pop_ratio(data, r, year, next), 1e-8),
-            Gn = _level(st.GDP0[r]) * growth_factor(data, r, year),
-            Rn = _level(st.GRG[r]) * growth_factor(data, r, next),
-            Sn = ord <= 10 ? _level(st.SAV[r]) * 0.9^ord : 0.0,
+            Ln = max(_level(st.l0[r]) * pop_ratio(data, r, year, next), 1e-8),
+            Gn = _level(st.gdp0[r]) * growth_factor(data, r, year),
+            Rn = _level(st.grg[r]) * growth_factor(data, r, next),
+            Sn = ord <= 10 ? _level(st.sav[r]) * 0.9^ord : 0.0,
         )
     end
     return out
@@ -183,11 +183,11 @@ end
 function _plant!(st, old, w)
     for r in st.R
         o = old[r]
-        set_value!(st.K0[r], (1 - w) * o.K + w * o.Kn)
-        set_value!(st.L0[r], (1 - w) * o.L + w * o.Ln)
-        set_value!(st.GDP0[r], (1 - w) * o.G + w * o.Gn)
-        set_value!(st.GRG[r], (1 - w) * o.Rgov + w * o.Rn)
-        set_value!(st.SAV[r], (1 - w) * o.S + w * o.Sn)
+        set_value!(st.k0[r], (1 - w) * o.K + w * o.Kn)
+        set_value!(st.l0[r], (1 - w) * o.L + w * o.Ln)
+        set_value!(st.gdp0[r], (1 - w) * o.G + w * o.Gn)
+        set_value!(st.grg[r], (1 - w) * o.Rgov + w * o.Rn)
+        set_value!(st.sav[r], (1 - w) * o.S + w * o.Sn)
     end
 end
 
@@ -204,7 +204,7 @@ function _scale_start!(MGE, st, old)
     for v in all_variables(jm)
         JuMP.is_fixed(v) && continue
         n = JuMP.name(v)
-        (startswith(n, "P") || startswith(n, "RA") || startswith(n, "gprod") || startswith(n, "rgdp")) && continue
+        (startswith(n, "P") || startswith(n, "RA") || startswith(n, "GPROD") || startswith(n, "RGDP")) && continue
         s = start_value(v)
         (s === nothing || !isfinite(s) || s == 0) && continue
         reg = _lastsym(n)
@@ -215,14 +215,14 @@ function _scale_start!(MGE, st, old)
         o = old[r]
         grow = o.G > 0 ? o.Gn / o.G : 1.0
         lrat = o.L > 0 ? o.Ln / o.L : 1.0
-        g0 = start_value(st.gprod[r])
+        g0 = start_value(st.GPROD[r])
         g0 = g0 === nothing ? 1.0 : g0
         if st.simu == 0
-            set_start_value(st.gprod[r], max(g0 * grow / lrat, 1e-6))
+            set_start_value(st.GPROD[r], max(g0 * grow / lrat, 1e-6))
         else
-            JuMP.set_start_value(get_variable(st.gprod[r]), JuMP.value(st.GP0[r]))
+            JuMP.set_start_value(get_variable(st.GPROD[r]), JuMP.value(st.gp0[r]))
         end
-        set_start_value(st.rgdp[r], o.Gn)
+        set_start_value(st.RGDP[r], o.Gn)
     end
     return nothing
 end
@@ -341,8 +341,8 @@ function _install_gprod!(st, bau, year)
     col = bau[(:gprod, year)]
     for r in st.R
         gp = col[r]
-        set_value!(st.GP0[r], gp)
-        JuMP.set_start_value(get_variable(st.gprod[r]), gp)
+        set_value!(st.gp0[r], gp)
+        JuMP.set_start_value(get_variable(st.GPROD[r]), gp)
     end
     return nothing
 end
@@ -402,7 +402,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
     bau = simu == 1 ? _load_bau() : nothing
     spdir = isempty(scenario) ? "" : _savepoint_dir(scenario)
-    println(simu == 0 ? "\nTFP calibration (simu = 0)" : "\nendogenous GDP, gprod from bau.jld2 (simu = 1)")
+    println(simu == 0 ? "\nTFP calibration (simu = 0)" : "\nendogenous GDP, GPROD from bau.jld2 (simu = 1)")
     isempty(spdir) || println("savepoint ", spdir)
     flush(stdout)
     MGE, st = build_model(data; simu)
@@ -456,9 +456,9 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
             row = (
                 year = year,
                 region = r,
-                gprod = _level(st.gprod[r]),
-                rgdp = _level(st.rgdp[r]),
-                target = _level(st.GDP0[r]),
+                gprod = _level(st.GPROD[r]),
+                rgdp = _level(st.RGDP[r]),
+                target = _level(st.gdp0[r]),
                 status = string(stt),
             )
             push!(rows, row)
@@ -490,3 +490,5 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
 end
 
 end
+
+

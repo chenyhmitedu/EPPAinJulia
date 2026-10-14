@@ -8,19 +8,43 @@ function active_blocks(B)
     ge = B.ge
     R = REGIONS
     I = SECTORS
+    y_na = [(i, r) for i in NOT_AENOE for r in R if g("xp0", (r, i)) > 0]
+    y_ei = [(i, r) for i in [:eint] for r in R if g("xp0", (r, i)) > 0]
+    y_ag = [(i, r) for i in AGRI for r in R if g("xp0", (r, i)) > 0]
+    y_en = [(i, r) for i in ENOE for r in R if g("xp0", (r, i)) > 0]
+    y_el = [r for r in R if g("xp0", (r, :elec)) > 0]
+    y_d = vcat(
+        [(:na, i, r) for (i, r) in y_na],
+        [(:ei, i, r) for (i, r) in y_ei],
+        [(:ag, i, r) for (i, r) in y_ag],
+        [(:en, i, r) for (i, r) in y_en],
+        [(:el, :elec, r) for r in y_el],
+    )
+    y_f = [(i_, r) for i_ in TECH_F for r in R if ge("xp0_", (i_, r)) > 0]
+    y_nhr = [(i_, r) for i_ in TECH_NHR for r in R if ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0]
+    y_n = [(i_, r) for i_ in TECH_N for r in R if ge("xp0_", (i_, r)) > 0]
+    y_tech = [(i_, r) for i_ in [:tele] for r in R if ge("xp0_", (i_, r)) > 0]
+    y_de = vcat(
+        [(:ef, :elec, r) for r in R],
+        [(:f, i_, r) for (i_, r) in y_f],
+        [(:nhr, i_, r) for (i_, r) in y_nhr],
+        [(:n, i_, r) for (i_, r) in y_n],
+        [(:tech, i_, r) for (i_, r) in y_tech],
+    )
     return (;
-        y_na = [(i, r) for i in NOT_AENOE for r in R if g("xp0", (r, i)) > 0],
-        y_ei = [(i, r) for i in [:eint] for r in R if g("xp0", (r, i)) > 0],
-        y_ag = [(i, r) for i in AGRI for r in R if g("xp0", (r, i)) > 0],
-        y_en = [(i, r) for i in ENOE for r in R if g("xp0", (r, i)) > 0],
-        y_el = [r for r in R if g("xp0", (r, :elec)) > 0],
-        y_f = [(t, r) for t in TECH_F for r in R if ge("xp0_", (t, r)) > 0],
-        y_nhr = [(t, r) for t in TECH_NHR for r in R if ge("xp0_", (t, r)) > 0 && get(B.ffact_e, (t, r), 0.0) > 0],
-        y_n = [(t, r) for t in TECH_N for r in R if ge("xp0_", (t, r)) > 0],
-        y_t = [(t, r) for t in [:tele] for r in R if ge("xp0_", (t, r)) > 0],
+        y_na,
+        y_ei,
+        y_ag,
+        y_en,
+        y_d,
+        y_el,
+        y_f,
+        y_nhr,
+        y_n,
+        y_tech,
+        y_de,
         y_arm = [(i, r) for i in I if i != :oil for r in R if B.a0[(r, i)] != 0],
         y_m = [(i, r) for i in I if i != :oil for r in R if g("xm0", (r, i)) > 0],
-        flows = [(r, rr, i) for r in R for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0],
         y_hm = [r for r in R if B.homm0[r] > 0],
         y_hx = [r for r in R if B.homx0[r] > 0],
     )
@@ -111,16 +135,16 @@ function en_block(B, i, r)
 end
 
 """
-    elec_inputs(B, t, r)
+    elec_inputs(B, i_, r)
 
 Material inputs and the refined-oil split for an electricity technology.
 """
-function elec_inputs(B, t, r)
-    mats = [(j, get(B.elecin, (t, j, r), 0.0), get(B.elecint, (t, j, r), 0.0)) for j in NE]
+function elec_inputs(B, i_, r)
+    mats = [(j, get(B.elecin, (i_, j, r), 0.0), get(B.elecint, (i_, j, r), 0.0)) for j in NE]
     fuels = []
     for j in ENERGY
-        q = get(B.elecin, (t, j, r), 0.0)
-        rate = get(B.elecint, (t, j, r), 0.0)
+        q = get(B.elecin, (i_, j, r), 0.0)
+        rate = get(B.elecint, (i_, j, r), 0.0)
         if j == :roil
             push!(fuels, (:ac, j, q * (1 - B.cr(:roil, :elec, r)), rate))
             push!(fuels, (:curb, j, q * B.cr(:roil, :elec, r), rate))
@@ -132,15 +156,15 @@ function elec_inputs(B, t, r)
 end
 
 """
-    tech_block(B, t, r)
+    tech_block(B, i_, r)
 
 Output, output tax, elasticities, and material inputs for an electricity technology.
 """
-function tech_block(B, t, r)
-    mats, _ = elec_inputs(B, t, r)
+function tech_block(B, i_, r)
+    mats, _ = elec_inputs(B, i_, r)
     return (;
-        td = B.ge("td_", (r, t)),
-        xp = B.ge("xp0_", (t, r)),
+        td = B.ge("td_", (r, i_)),
+        xp = B.ge("xp0_", (i_, r)),
         ekl = B.elas(:elec, :e_kl, r),
         lk = B.elas(:elec, :l_k, r),
         mats,
@@ -148,23 +172,23 @@ function tech_block(B, t, r)
 end
 
 """
-    nhr_block(B, t, r)
+    nhr_block(B, i_, r)
 
 `tech_block` plus the resource-nest elasticity for the fixed-factor technologies.
 """
-function nhr_block(B, t, r)
-    q = tech_block(B, t, r)
-    return (; q..., sig = B.nhrsigma[(t, r)])
+function nhr_block(B, i_, r)
+    q = tech_block(B, i_, r)
+    return (; q..., sig = B.nhrsigma[(i_, r)])
 end
 
 """
-    renewable_block(B, t, r)
+    renewable_block(B, i_, r)
 
 `tech_block` plus the top-nest elasticity for solar and wind.
 """
-function renewable_block(B, t, r)
-    q = tech_block(B, t, r)
-    return (; q..., sig = get(B.wst, (t, r), 0.0))
+function renewable_block(B, i_, r)
+    q = tech_block(B, i_, r)
+    return (; q..., sig = get(B.wst, (i_, r), 0.0))
 end
 
 """
@@ -202,3 +226,4 @@ function arm_block(B, i, r)
     end
     return (; qout, qdom, sdm = B.elas(i, :sdm, r))
 end
+
