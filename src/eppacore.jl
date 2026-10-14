@@ -123,11 +123,6 @@ function _build_model(B, simu::Integer = 0)
         RA[r=R],                                                (description = "Representative agent")
     end)
 
-    gp0_param = nothing
-    if simu == 1
-        gp0_param = gp0
-    end
-
     for (i, r) in y_na
         q = na_block(B, i, r)
         @production(MGE, D[(:na, i, r)], [t=2, s=q.sigu, b=>s=q.es, a=>b=q.pn, ee=>a=q.ekl, va=>ee=q.lk, en=>ee=q.noe, en1=>en=q.esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
@@ -391,22 +386,35 @@ function _build_model(B, simu::Integer = 0)
     end
 
     for r in R
-        ex = sum((1 + g("tx", (i, r, rr))) * PD[i, r] * g("wtflow0", (rr, r, i))
-                 for rr in R for i in I if i != :oil && g("wtflow0", (rr, r, i)) > 0; init=0)
-        im = sum((1 + g("tx", (i, rr, r))) * PD[i, rr] * g("wtflow0", (r, rr, i))
-                 for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0; init=0)
-        hx = B.homx0[r] > 0 ? PWH * B.homx0[r] * HOMX[r] : 0
-        hm = B.homm0[r] > 0 ? PWH * B.homm0[r] * HOMM[r] : 0
+
         @aux_constraint(MGE, RGDP[r],
-            PU[r] * RGDP[r] - (PU[r] * g("cons0", (r,)) * Z[r] + B.inv0[r] * PINV[r] * INV[r] + B.g0[r] * PG[r] * GOVT[r] + ex - im + hx - hm))
+            PU[r] * RGDP[r] 
+                - PU[r] * g("cons0", (r,)) * Z[r] 
+                - B.inv0[r] * PINV[r] * INV[r] 
+                - B.g0[r] * PG[r] * GOVT[r] 
+                - sum((1 + g("tx", (i, r, rr))) * PD[i, r] * g("wtflow0", (rr, r, i)) 
+                    for rr in R for i in I if i != :oil && g("wtflow0", (rr, r, i)) > 0; init=0) 
+                - (B.homx0[r] > 0 ? PWH * B.homx0[r] * HOMX[r] : 0)
+                + sum((1 + g("tx", (i, rr, r))) * PD[i, rr] * g("wtflow0", (r, rr, i)) 
+                    for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0; init=0) 
+                + (B.homm0[r] > 0 ? PWH * B.homm0[r] * HOMM[r] : 0)
+            )
+        
         if simu == 0
             @aux_constraint(MGE, GPROD[r], RGDP[r] - gdp0[r])
         else
             @aux_constraint(MGE, GPROD[r], GPROD[r] - gp0[r])
         end
+        
     end
 
     fix(PU[:usa], 1.0)
+
+    gp0_param = nothing
+    if simu == 1
+        gp0_param = gp0
+    end
+
     state = (; MGE, R, k0, l0, sav, grg, gdp0, GPROD, RGDP, gp0 = gp0_param, simu,
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
         labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
