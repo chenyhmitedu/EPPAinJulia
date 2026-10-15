@@ -1,4 +1,4 @@
 /results/*.*
 /data/
 /savepoint/
-.julia_depot
+/.julia_depot
