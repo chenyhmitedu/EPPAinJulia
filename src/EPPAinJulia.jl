@@ -12,7 +12,7 @@ Benchmark accounts follow the active v-ref structure. Emission pass-through
 nests are identities at a zero carbon price, so energy inputs use `pa` (`phom`
 for crude oil) directly.
 
-Data readers parse the GAMS parameter dump and the xls2gms tables used by a run.
+Data readers parse the GAMS parameter dump and the satellite workbook.
 """
 module EPPAinJulia
 
@@ -20,6 +20,7 @@ using JuMP
 using JLD2
 using MPSGE
 using PATHSolver
+using XLSX
 
 export load_benchmark, prepare, build_model, EPPA_model, run_scenario
 

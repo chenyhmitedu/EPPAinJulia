@@ -79,10 +79,7 @@ function _build_model(B, simu::Integer = 0)
         PL[r=R],                                                (description = "Price index for labor")
         PF[i=I, r=R],                                           (description = "Price index for fixed factor") 
         PF_[i_=TECH, r=R],                                      (description = "Price index for fixed factor: power subsector")     
-        PDD[r=R],                                               (description = "Price index for dispatchable generation")
-        PDF[i_=TECH_F, r=R],                                    (description = "Price index for each fossil-fuel-based generation")         
-        PDN[i_=TECH_N, r=R],                                    (description = "Price index for non-dispatchable generation")         
-        PDT[r=R],                                               (description = "Price index for transmission and distribution")
+        PDE[i_=PDE_DIM, r=R],                                   (description = "Price index for electricity generation and delivery")
         PG[r=R],                                                (description = "Price index for government output")
         PINV[r=R],                                              (description = "Price index for investment")
         PT,                                                     (description = "Price index for international transport")
@@ -197,21 +194,21 @@ function _build_model(B, simu::Integer = 0)
     for r in y_el
         @production(MGE, D[(:el, :elec, r)], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
             @output(PD[:elec, r], g("xp0", (r, :elec)), t)
-            [@input(PDN[:sele, r], ge("xp0_", (:sele, r)), s001)]...
-            [@input(PDD[r], sum(ge("xp0_", (i_, r)) for i_ in TECH_D), s011)]...
-            [@input(PDN[:wele, r], ge("xp0_", (:wele, r)), s011)]...
-            [@input(PDT[r], ge("xp0_", (:tele, r)), s)]...
+            [@input(PDE[:sele, r], ge("xp0_", (:sele, r)), s001)]...
+            [@input(PDE[:dispgen, r], sum(ge("xp0_", (i_, r)) for i_ in TECH_D), s011)]...
+            [@input(PDE[:wele, r], ge("xp0_", (:wele, r)), s011)]...
+            [@input(PDE[:tnd, r], ge("xp0_", (:tele, r)), s)]...
         end)
         @production(MGE, DE[(:ef, :elec, r)], [t=0, s=1.5], begin
-            @output(PDD[r], sum(ge("xp0_", (i_, r)) for i_ in TECH_F), t)
-            [@input(PDF[i_, r], ge("xp0_", (i_, r)), s) for i_ in TECH_F]...
+            @output(PDE[:dispgen, r], sum(ge("xp0_", (i_, r)) for i_ in TECH_F), t)
+            [@input(PDE[i_, r], ge("xp0_", (i_, r)), s) for i_ in TECH_F]...
         end)
     end
 
     for (i_, r) in y_f
         q = tech_block(B, i_, r)
         @production(MGE, DE[(:f, i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDF[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+            @output(PDE[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
             @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
             @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
@@ -228,7 +225,7 @@ function _build_model(B, simu::Integer = 0)
     for (i_, r) in y_nhr
         q = nhr_block(B, i_, r)
         @production(MGE, DE[(:nhr, i_, r)], [t=0, s=0, bc=>s=q.sig, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDD[r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+            @output(PDE[:dispgen, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
             @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
             @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
@@ -245,7 +242,7 @@ function _build_model(B, simu::Integer = 0)
     for (i_, r) in y_n
         q = renewable_block(B, i_, r)
         @production(MGE, DE[(:n, i_, r)], [t=0, s=0, s001=>s=q.sig, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDN[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+            @output(PDE[i_, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
             @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
             @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
@@ -261,7 +258,7 @@ function _build_model(B, simu::Integer = 0)
     for (i_, r) in y_tech
         q = tech_block(B, i_, r)
         @production(MGE, DE[(:tech, i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDT[r], q.xp, t, taxes=[Tax(RA[r], q.td)])
+            @output(PDE[:tnd, r], q.xp, t, taxes=[Tax(RA[r], q.td)])
             [@input(PA[j, r], qty, ac, taxes=[Tax(RA[r], rate)], reference_price=1 + rate) for (j, qty, rate) in q.mats]...
             @input(PHOM[r], get(B.elecin, (i_, :oil, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :oil, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :oil, r), 0.0))
             @input(PA[:gas, r], get(B.elecin, (i_, :gas, r), 0.0), curb, taxes=[Tax(RA[r], get(B.elecint, (i_, :gas, r), 0.0))], reference_price=1 + get(B.elecint, (i_, :gas, r), 0.0))
@@ -425,11 +422,3 @@ function _build_model(B, simu::Integer = 0)
     end
     return MGE, state
 end
-
-
-
-
-
-
-
-

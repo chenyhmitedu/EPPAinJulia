@@ -17,7 +17,7 @@ here = joinpath(@__DIR__, "data")
 data = prepare(
     joinpath(here, "eppa8data_2017.dat"),
     joinpath(here, "eppa8data_elec_2017.dat"),
-    joinpath(here, "extracted"),
+    joinpath(here, "satellite.xlsx"),
 )
 println("regions ", length(data.REGIONS))
 

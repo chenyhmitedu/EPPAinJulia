@@ -13,6 +13,7 @@ const TECH_F = [:cele, :gele, :oele]
 const TECH_NHR = [:nele, :hele, :rele]
 const TECH_N = [:sele, :wele]
 const TECH_D = [:cele, :gele, :oele, :hele, :nele, :rele]
+const PDE_DIM = [:dispgen, TECH_F..., TECH_N..., :tnd]
 const NOT_AENOE = [:food, :othr, :serv, :tran, :dwe]
 
 const HTRNS = 0.3753
@@ -20,8 +21,7 @@ const PROPFRAC = 0.2
 const DPE = 0.05
 const ROR = 0.1
 
-function load_gms_table(path)
-    lines = readlines(path)
+function load_gms_table(lines)
     body = String[]
     inside = false
     for ln in lines
@@ -69,10 +69,10 @@ function load_gms_table(path)
     return data
 end
 
-function load_assigns(path)
+function load_assigns(lines)
     data = Dict{Symbol,Float64}()
     rx = r"\(\s*\"([^\"]+)\"\s*\)\s*=\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"
-    for ln in readlines(path)
+    for ln in lines
         m = match(rx, ln)
         m === nothing && continue
         data[Symbol(lowercase(m.captures[1]))] = parse(Float64, m.captures[2])
@@ -81,7 +81,7 @@ function load_assigns(path)
 end
 
 """
-    prepare(dat_path, elec_path, extracted)
+    prepare(dat_path, elec_path, satellite)
 
 Build the benchmark accounts for the active v-ref structure.
 
@@ -96,7 +96,7 @@ is treated as one homogeneous good; gas is not. The electricity resource split
 follows `elecpower.gms` and rewrites local copies of `elecin`. A production
 identity is checked for the non-electricity GTAP sectors.
 """
-function prepare(dat_path, elec_path, extracted)
+function prepare(dat_path, elec_path, satellite)
     wanted = Set([
         "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
         "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
@@ -117,38 +117,42 @@ function prepare(dat_path, elec_path, extracted)
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
 
-    selas = load_gms_table(joinpath(extracted, "parameters_eppaelas_selas.inc"))
+    book = satellite_lines(satellite, (
+        "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
+        "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
+        "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
+        "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa",
+    ))
+    selas = load_gms_table(book["eppaelas_selas"])
     for (k, v) in selas
         if length(k) == 3 && k[2] == :noe_el
             selas[k] = 3v
         end
     end
-    esup = load_gms_table(joinpath(extracted, "parameters_eppaelas_esup.inc"))
-    esube = load_gms_table(joinpath(extracted, "parameters_eppaelas_esube.inc"))
-    sigu = load_gms_table(joinpath(extracted, "parameters_eppaelas_sigu.inc"))
+    esup = load_gms_table(book["eppaelas_esup"])
+    esube = load_gms_table(book["eppaelas_esube"])
+    sigu = load_gms_table(book["eppaelas_sigu"])
     delas_raw = Dict{Tuple,Float64}()
-    open(joinpath(extracted, "parameters_eppaelas_d_elas.inc")) do io
-        for ln in eachline(io)
-            s = strip(ln)
-            (isempty(s) || startswith(s, "*") || startswith(s, "/") || startswith(lowercase(s), "parameter")) && continue
-            parts = split(s)
-            length(parts) < 2 && continue
-            v = tryparse(Float64, parts[end])
-            v === nothing && continue
-            delas_raw[(Symbol(lowercase(parts[1])),)] = v
-        end
+    for ln in book["eppaelas_d_elas"]
+        s = strip(ln)
+        (isempty(s) || startswith(s, "*") || startswith(s, "/") || startswith(lowercase(s), "parameter")) && continue
+        parts = split(s)
+        length(parts) < 2 && continue
+        v = tryparse(Float64, parts[end])
+        v === nothing && continue
+        delas_raw[(Symbol(lowercase(parts[1])),)] = v
     end
     delas = delas_raw
-    crtable = load_gms_table(joinpath(extracted, "core_eppacalib_crtable.inc"))
-    bio = load_gms_table(joinpath(extracted, "core_readgtap_bio.inc"))
-    nhreta = load_gms_table(joinpath(extracted, "core_elecpower_nhreta.inc"))
-    wst = load_gms_table(joinpath(extracted, "core_elecpower_wstsigma.inc"))
-    os = load_assigns(joinpath(extracted, "parameters_eppa_htrn_os.inc"))
-    esh = load_assigns(joinpath(extracted, "parameters_eppa_htrn_es.inc"))
-    mvh = load_assigns(joinpath(extracted, "parameters_eppa_htrn_mvh.inc"))
-    hist = load_t_table(joinpath(extracted, "parameters_eppatrend_histrgdp.inc"))
-    ann = load_t_table(joinpath(extracted, "parameters_eppatrend_argdpgrrate.inc"))
-    pop = load_t_table(joinpath(extracted, "parameters_eppatrend_popa_eppa.inc"))
+    crtable = load_gms_table(book["eppacalib_crtable"])
+    bio = load_gms_table(book["readgtap_bio"])
+    nhreta = load_gms_table(book["elecpower_nhreta"])
+    wst = load_gms_table(book["elecpower_wstsigma"])
+    os = load_assigns(book["eppa_htrn_os"])
+    esh = load_assigns(book["eppa_htrn_es"])
+    mvh = load_assigns(book["eppa_htrn_mvh"])
+    hist = load_t_table(book["eppatrend_histrgdp"])
+    ann = load_t_table(book["eppatrend_argdpgrrate"])
+    pop = load_t_table(book["eppatrend_popa_eppa"])
 
     elas(g, layer, r) = get(selas, (g, layer, r), 0.0)
     cr(i, g, r) = i == :roil ? get(crtable, (g, r), 0.0) : 1.0

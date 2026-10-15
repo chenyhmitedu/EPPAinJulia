@@ -15,7 +15,13 @@ function load_years(path)
     return years
 end
 
-const YEARS = load_years(normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
+const DEFAULT_YEARS = [2017; 2020:5:2100]
+
+function model_years(path = normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
+    return isfile(path) ? load_years(path) : DEFAULT_YEARS
+end
+
+const YEARS = model_years()
 
 """
     step_years(i::Integer)
@@ -79,12 +85,12 @@ function getp(parms, name, key)
 end
 
 """
-    load_t_table(path)
+    load_t_table(lines)
 
 Parse an xls2gms `table` whose rows are `%tNNN%` and whose header is region names.
+`lines` are the text rows of one satellite sheet.
 """
-function load_t_table(path)
-    lines = readlines(path)
+function load_t_table(lines)
     body = String[]
     inside = false
     for ln in lines
@@ -99,7 +105,7 @@ function load_t_table(path)
         (isempty(s) || startswith(s, "*")) && continue
         push!(body, ln)
     end
-    isempty(body) && error("no table body in $path")
+    isempty(body) && error("no table body in satellite sheet")
     regions = Symbol.(lowercase.(split(strip(body[1]))))
     data = Dict{Tuple{Symbol,Symbol},Float64}()
     for ln in body[2:end]
@@ -116,7 +122,52 @@ function load_t_table(path)
     return data
 end
 
-function load_benchmark(dat_path, extracted_dir)
+"""
+    gms_token(cell)
+
+Text of one satellite cell, in the form the GAMS table parsers expect.
+"""
+function gms_token(cell)
+    if cell isa Integer
+        return string(cell)
+    elseif cell isa AbstractFloat
+        return string(cell)
+    else
+        return strip(string(cell))
+    end
+end
+
+"""
+    gms_lines(sheet)
+
+Join the non-empty cells of one satellite sheet into text rows.
+"""
+function gms_lines(sheet)
+    lines = String[]
+    data = XLSX.getdata(sheet)
+    for row in eachrow(data)
+        parts = String[]
+        for cell in row
+            (cell === missing || cell === nothing || cell == "") && continue
+            push!(parts, gms_token(cell))
+        end
+        isempty(parts) && continue
+        push!(lines, join(parts, " "))
+    end
+    return lines
+end
+
+"""
+    satellite_lines(path, names)
+
+Text rows of the named sheets in `satellite.xlsx`.
+"""
+function satellite_lines(path, names)
+    xf = XLSX.readxlsx(path)
+    return Dict(name => gms_lines(xf[name]) for name in names)
+end
+
+function load_benchmark(dat_path, satellite)
     wanted = Set([
         "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
         "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
@@ -126,9 +177,10 @@ function load_benchmark(dat_path, extracted_dir)
     p = load_gams_dat(dat_path, wanted)
     regions = sort!(unique(first.(keys(p["cons0"]))))
     sectors = sort!(unique(last.(keys(p["xp0"]))))
-    hist = load_t_table(joinpath(extracted_dir, "parameters_eppatrend_histrgdp.inc"))
-    ann = load_t_table(joinpath(extracted_dir, "parameters_eppatrend_argdpgrrate.inc"))
-    pop = load_t_table(joinpath(extracted_dir, "parameters_eppatrend_popa_eppa.inc"))
+    book = satellite_lines(satellite, ("eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa"))
+    hist = load_t_table(book["eppatrend_histrgdp"])
+    ann = load_t_table(book["eppatrend_argdpgrrate"])
+    pop = load_t_table(book["eppatrend_popa_eppa"])
     return (; p, regions, sectors, hist, ann, pop)
 end
 
