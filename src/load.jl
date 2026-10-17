@@ -15,13 +15,20 @@ function load_years(path)
     return years
 end
 
-const DEFAULT_YEARS = [2017; 2020:5:2100]
-
 function model_years(path = normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
-    return isfile(path) ? load_years(path) : DEFAULT_YEARS
+    return isfile(path) ? load_years(path) : Int[]
 end
 
 const YEARS = model_years()
+
+function set_model_years!(years)
+    vals = collect(Int, years)
+    (length(vals) >= 2 && issorted(vals) && allunique(vals)) ||
+        error("period list must be at least two increasing years")
+    empty!(YEARS)
+    append!(YEARS, vals)
+    return YEARS
+end
 
 """
     step_years(i::Integer)
@@ -210,3 +217,4 @@ function pop_ratio(data, r, year, next)
     b = data.pop[(tcode(next), r)]
     return a == 0 ? 1.0 : b / a
 end
+

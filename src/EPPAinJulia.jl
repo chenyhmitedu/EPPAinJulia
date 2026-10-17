@@ -22,7 +22,7 @@ using MPSGE
 using PATHSolver
 using XLSX
 
-export load_benchmark, prepare, build_model, EPPA_model, run_scenario
+export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -491,5 +491,6 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
 end
 
 end
+
 
 
