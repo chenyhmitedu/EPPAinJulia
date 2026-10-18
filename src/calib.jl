@@ -1,4 +1,4 @@
-const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
+﻿const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
 const SECTORS = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
 const NE = [:crop, :live, :fors, :food, :eint, :othr, :serv, :tran, :dwe]
 const NENDT = [:crop, :live, :fors, :food, :eint, :othr, :serv]
@@ -158,24 +158,75 @@ function prepare(dat_path, elec_path, satellite)
     cr(i, g, r) = i == :roil ? get(crtable, (g, r), 0.0) : 1.0
 
     ffact = Dict{Tuple{Symbol,Symbol},Float64}()
+    ffend0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    ffgprod0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    labd0 = Dict(k => v for (k, v) in p["labd0"])
+    kapd0 = Dict(k => v for (k, v) in p["kapd0"])
+    xaroila = Dict{Tuple{Symbol,Symbol},Float64}()
+    xaroilc = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS, i in SECTORS
         ffact[(r, i)] = g("ffactd0", (r, i)) * (1 + g("tf", (:lnd, i, r)))
+        ffend0[(r, i)] = i in FF ? ffact[(r, i)] : 0.0
+        ffgprod0[(r, i)] = i in FF ? 0.0 : ffact[(r, i)]
     end
 
     a0 = Dict{Tuple{Symbol,Symbol},Float64}()
     d0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    dout_pd = Dict{Tuple{Symbol,Symbol},Float64}()
+    dout_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
+    dout_phom = Dict{Tuple{Symbol,Symbol},Float64}()
     td = Dict{Tuple{Symbol,Symbol},Float64}()
+    cons0 = Dict{Symbol,Float64}()
     inv0 = Dict{Symbol,Float64}()
     g0 = Dict{Symbol,Float64}()
+    pwdem0 = Dict{Symbol,Float64}()
+    govdem0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    govoil0 = Dict{Symbol,Float64}()
+    invdem0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    invoil0 = Dict{Symbol,Float64}()
+    trnvst0 = Dict{Symbol,Float64}()
+    ytout0 = 0.0
     for r in REGIONS
+        cons0[r] = g("cons0", (r,))
         inv0[r] = sum(g("xdi0", (r, i)) + g("xmi0", (r, i)) for i in SECTORS)
+        pwdem0[r] = cons0[r] + inv0[r]
+        govoil0[r] = g("xdg0", (r, :oil)) + g("xmg0", (r, :oil))
+        invoil0[r] = g("xdi0", (r, :oil)) + g("xmi0", (r, :oil))
+        trnvst0[r] = g("vst", (:tran, r))
+        ytout0 += trnvst0[r]
         g0[r] = g("kapdg0", (r,)) + g("labdg0", (r,)) + g("trg0", (r,)) +
                 sum(g("xdg0", (r, i)) + g("xmg0", (r, i)) for i in SECTORS)
         for i in SECTORS
             a0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) + g("xm0", (r, i)) - g("vst", (i, r))
             d0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) - g("vst", (i, r))
             xp = g("xp0", (r, i))
+            dout_pd[(r, i)] = xp
+            dout_pdb[(r, i)] = 0.0
+            dout_phom[(r, i)] = 0.0
+            if i == :oil
+                dout_pd[(r, i)] = 0.0
+                dout_phom[(r, i)] = xp
+            end
             td[(r, i)] = xp == 0 ? 0.0 : g("ptxy0", (r, i)) / xp
+            govdem0[(r, i)] = i == :oil ? 0.0 : g("xdg0", (r, i)) + g("xmg0", (r, i))
+            invdem0[(r, i)] = i == :oil ? 0.0 : g("xdi0", (r, i)) + g("xmi0", (r, i))
+            labd0[(r, i)] = get(labd0, (r, i), 0.0)
+            kapd0[(r, i)] = get(kapd0, (r, i), 0.0)
+            xaroil = get(xa0, (r, :roil, i), 0.0)
+            xaroila[(r, i)] = xaroil * (1 - cr(:roil, i, r))
+            xaroilc[(r, i)] = xaroil * cr(:roil, i, r)
+            for j in SECTORS
+                xa0[(r, j, i)] = get(xa0, (r, j, i), 0.0)
+            end
+        end
+    end
+    xm0 = Dict(k => v for (k, v) in p["xm0"])
+    wtflow = Dict(k => v for (k, v) in p["wtflow0"])
+    mvtwr = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    for r in REGIONS, i in SECTORS
+        xm0[(r, i)] = get(xm0, (r, i), 0.0)
+        for rr in REGIONS
+            wtflow[(r, rr, i)] = get(wtflow, (r, rr, i), 0.0)
         end
     end
 
@@ -187,8 +238,11 @@ function prepare(dat_path, elec_path, satellite)
     toi = Dict{Symbol,Float64}()
     tse = Dict{Symbol,Float64}()
     own = Dict{Symbol,Float64}()
+    hhwedge = Dict{Symbol,Float64}()
     tottrn = Dict{Symbol,Float64}()
+    xh = Dict{Tuple{Symbol,Symbol},Float64}()
     ence = Dict{Tuple{Symbol,Symbol},Float64}()
+    encep = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS
         purtrn[r] = g("xdc0", (r, :tran)) + g("xmc0", (r, :tran))
         xdc[(r, :tran)] = 0.0
@@ -206,15 +260,49 @@ function prepare(dat_path, elec_path, satellite)
         tottrn[r] = purtrn[r] * g("pc0", (:tran, r)) + owntrn + (pcR - g("pc0", (foodp, r))) * tbo[r]
         tse[r] = (owntrn - tfo[r] * pcR - toi[r] * g("pc0", (:othr, r)) - tbo[r] * g("pc0", (foodp, r))) / g("pc0", (:serv, r))
         own[r] = pcR * (tfo[r] + tbo[r]) + g("pc0", (:othr, r)) * toi[r] + g("pc0", (:serv, r)) * tse[r]
+        hhwedge[r] = (pcR - g("pc0", (foodp, r))) * tbo[r]
         xdc[(r, :roil)] = g("xdc0", (r, :roil)) - tfo[r]
         xdc[(r, foodp)] = g("xdc0", (r, foodp)) - tbo[r]
         xdc[(r, :othr)] = g("xdc0", (r, :othr)) - toi[r]
         xdc[(r, :serv)] = g("xdc0", (r, :serv)) - tse[r]
+        for i in NENDT
+            xh[(i, r)] = max(get(xdc, (r, i), 0.0) + get(xmc, (r, i), 0.0), 0.0)
+        end
+        xh[(:dwe, r)] = max(get(xdc, (r, :dwe), 0.0) + get(xmc, (r, :dwe), 0.0), 0.0)
         for i in ENERGY
             ence[(i, r)] = g("xdc0", (r, i)) + g("xmc0", (r, i))
         end
         ence[(:roil, r)] -= tfo[r]
+        for i in ENERGY
+            encep[(i, r)] = max(ence[(i, r)], 0.0)
+        end
     end
+
+    for r in REGIONS
+        dout_pd[(r, :food)] -= tbo[r]
+        dout_pdb[(r, :food)] = tbo[r]
+        if r == :bra
+            dout_pd[(r, :food)] += tbo[r]
+            dout_pdb[(r, :food)] = 0.0
+            dout_pd[(r, :eint)] -= tbo[r]
+            dout_pdb[(r, :eint)] = tbo[r]
+        end
+    end
+
+    armqout = Dict{Tuple{Symbol,Symbol},Float64}()
+    armqdom = Dict{Tuple{Symbol,Symbol},Float64}()
+    for r in REGIONS, i in SECTORS
+        armqout[(r, i)] = a0[(r, i)]
+        armqdom[(r, i)] = d0[(r, i)]
+        if (i == :food && r != :bra) || (i == :eint && r == :bra)
+            armqout[(r, i)] -= tbo[r]
+            armqdom[(r, i)] -= tbo[r]
+        end
+        for rr in REGIONS
+            mvtwr[(r, rr, i)] = sum(g("vtwr", (j, i, rr, r)) for j in SECTORS)
+        end
+    end
+
 
     homm0 = Dict{Symbol,Float64}()
     homx0 = Dict{Symbol,Float64}()
@@ -248,6 +336,14 @@ function prepare(dat_path, elec_path, satellite)
     elecint = Dict(k => v for (k, v) in e["elecint"])
     ffact_e = Dict{Tuple{Symbol,Symbol},Float64}()
     nhrsigma = Dict{Tuple{Symbol,Symbol},Float64}()
+    elexp0 = Dict{Symbol,Float64}()
+    sele0 = Dict{Symbol,Float64}()
+    dispgen0 = Dict{Symbol,Float64}()
+    wele0 = Dict{Symbol,Float64}()
+    tele0 = Dict{Symbol,Float64}()
+    efout0 = Dict{Symbol,Float64}()
+    techxp0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    sav0 = Dict{Symbol,Float64}()
     kapital = Dict(r => sum(g("kapd0", (r, i)) for i in SECTORS) for r in REGIONS)
     labor = Dict(r => sum(g("labd0", (r, i)) for i in SECTORS) + g("labdg0", (r,)) for r in REGIONS)
     rshr = Dict(:nele => 0.15, :hele => 0.30, :rele => 0.15)
@@ -290,7 +386,32 @@ function prepare(dat_path, elec_path, satellite)
         nhrsigma[(t, r)] = (1 - share) == 0 ? 0.0 : eta * share / (1 - share)
     end
 
+    for r in REGIONS, t in TECH, inp in (NE..., :oil, :gas, :coal, :elec, :roil, :lab, :cap, :res)
+        elecin[(t, inp, r)] = get(elecin, (t, inp, r), 0.0)
+        elecint[(t, inp, r)] = get(elecint, (t, inp, r), 0.0)
+    end
+
+
+    for r in REGIONS
+        elexp0[r] = g("xp0", (r, :elec))
+        sele0[r] = ge("xp0_", (:sele, r))
+        dispgen0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_D)
+        wele0[r] = ge("xp0_", (:wele, r))
+        tele0[r] = ge("xp0_", (:tele, r))
+        efout0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_F)
+        for i_ in TECH
+            techxp0[(i_, r)] = ge("xp0_", (i_, r))
+        end
+    end
+
     rgdp0 = Dict{Symbol,Float64}()
+    for r in REGIONS
+        sav0[r] = g("savf0", (r,))
+        for t in TECH_NHR
+            ffact_e[(t, r)] = get(ffact_e, (t, r), 0.0)
+        end
+    end
+
     for r in REGIONS
         exports = 0.0
         imports = 0.0
@@ -299,7 +420,7 @@ function prepare(dat_path, elec_path, satellite)
             exports += (1 + g("tx", (i, r, rr))) * g("wtflow0", (rr, r, i))
             imports += (1 + g("tx", (i, rr, r))) * g("wtflow0", (r, rr, i))
         end
-        rgdp0[r] = g("cons0", (r,)) + inv0[r] + g0[r] + exports - imports + homx0[r] - homm0[r]
+        rgdp0[r] = cons0[r] + inv0[r] + g0[r] + exports - imports + homx0[r] - homm0[r]
     end
 
     gap = 0.0
@@ -335,9 +456,11 @@ function prepare(dat_path, elec_path, satellite)
     return (;
         p, g, ge, REGIONS, SECTORS, hist, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
-        a0, d0, td, inv0, g0, ffact, xdc, xmc,
-        purtrn, tbo, tfo, toi, tse, own, tottrn, ence,
+        a0, d0, dout_pd, dout_pdb, dout_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
+        xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
+        purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, kapital, labor, rgdp0,
     )
 end
+
