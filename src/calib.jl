@@ -1,5 +1,6 @@
-﻿const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
+const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
 const SECTORS = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
+const EJUSE_SECTORS = [SECTORS..., :households, :htrn]
 const NE = [:crop, :live, :fors, :food, :eint, :othr, :serv, :tran, :dwe]
 const NENDT = [:crop, :live, :fors, :food, :eint, :othr, :serv]
 const AENOE = [:coal, :oil, :gas, :roil, :crop, :live, :fors, :elec, :eint]
@@ -102,7 +103,7 @@ function prepare(dat_path, elec_path, satellite)
         "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
         "ti", "tf", "tp", "tg", "pg0", "pc0", "pf0", "ptxy0",
         "tx", "tm", "wtflow0", "vtwr", "savf0", "cons0", "kapdg0", "labdg0", "trg0",
-        "efd", "savh0",
+        "efd", "savh0", "eind",
     ])
     p = load_gams_dat(dat_path, wanted)
     xa0 = Dict{Tuple,Float64}()
@@ -121,6 +122,7 @@ function prepare(dat_path, elec_path, satellite)
         "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
+        "readgtap_ej_use_iea", "readgtap_eprod_iea",
         "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa",
     ))
     selas = load_gms_table(book["eppaelas_selas"])
@@ -150,6 +152,8 @@ function prepare(dat_path, elec_path, satellite)
     os = load_assigns(book["eppa_htrn_os"])
     esh = load_assigns(book["eppa_htrn_es"])
     mvh = load_assigns(book["eppa_htrn_mvh"])
+    ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
+    eprod_iea = load_gms_table(book["readgtap_eprod_iea"])
     hist = load_t_table(book["eppatrend_histrgdp"])
     ann = load_t_table(book["eppatrend_argdpgrrate"])
     pop = load_t_table(book["eppatrend_popa_eppa"])
@@ -243,6 +247,7 @@ function prepare(dat_path, elec_path, satellite)
     xh = Dict{Tuple{Symbol,Symbol},Float64}()
     ence = Dict{Tuple{Symbol,Symbol},Float64}()
     encep = Dict{Tuple{Symbol,Symbol},Float64}()
+    pac0 = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS
         purtrn[r] = g("xdc0", (r, :tran)) + g("xmc0", (r, :tran))
         xdc[(r, :tran)] = 0.0
@@ -344,6 +349,9 @@ function prepare(dat_path, elec_path, satellite)
     efout0 = Dict{Symbol,Float64}()
     techxp0 = Dict{Tuple{Symbol,Symbol},Float64}()
     sav0 = Dict{Symbol,Float64}()
+    eesec0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    eusecoef0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    eeseccoef = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     kapital = Dict(r => sum(g("kapd0", (r, i)) for i in SECTORS) for r in REGIONS)
     labor = Dict(r => sum(g("labd0", (r, i)) for i in SECTORS) + g("labdg0", (r,)) for r in REGIONS)
     rshr = Dict(:nele => 0.15, :hele => 0.30, :rele => 0.15)
@@ -391,6 +399,54 @@ function prepare(dat_path, elec_path, satellite)
         elecint[(t, inp, r)] = get(elecint, (t, inp, r), 0.0)
     end
 
+    gv = g
+    ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
+    for r in REGIONS
+        coalden = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
+        gasden = sum(gv("eind", (:gas, g, r)) for g in SECTORS) + gv("efd", (:gas, r))
+        oilden = sum(gv("eind", (:oil, g, r)) for g in SECTORS) + gv("efd", (:oil, r))
+        elecden = sum(gv("eind", (:elec, g, r)) for g in SECTORS) + gv("efd", (:elec, r))
+        elecnum = sum(get(eprod_iea, (t, r), 0.0) for t in TECH)
+        ejadj[(:coal, r)] = coalden == 0 ? 1.0 : get(ej_use_iea, (:coal, r), 0.0) / coalden
+        ejadj[(:gas, r)] = gasden == 0 ? 1.0 : get(ej_use_iea, (:gas, r), 0.0) / gasden
+        oiladj = oilden == 0 ? 1.0 : get(ej_use_iea, (:oil, r), 0.0) / oilden
+        ejadj[(:oil, r)] = oiladj
+        ejadj[(:roil, r)] = oiladj
+        ejadj[(:elec, r)] = elecden == 0 ? 1.0 : elecnum / elecden
+    end
+
+    for r in REGIONS, g in SECTORS, e in ENERGY
+        eesec0[(e, g, r)] = ejadj[(e, r)] * gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
+        if g == :elec
+            eusecoef0[(e, g, r)] = sum(elecin[(t, e, r)] for t in TECH)
+        else
+            eusecoef0[(e, g, r)] = xa0[(r, e, g)]
+        end
+        denom = eusecoef0[(e, g, r)]
+        eeseccoef[(e, g, r)] = denom == 0 ? 0.0 : eesec0[(e, g, r)] / denom
+    end
+
+    for r in REGIONS, e in ENERGY
+        eesec0[(e, :households, r)] = ejadj[(e, r)] * (e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) * cr(:roil, :final, r) : gv("efd", (e, r)))
+        eesec0[(e, :htrn, r)] = ejadj[(e, r)] * (e == :roil ? os[r] * gv("efd", (:roil, r)) * cr(:roil, :final, r) : 0.0)
+        eusecoef0[(e, :households, r)] = encep[(e, r)]
+        eusecoef0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
+        denom = eusecoef0[(e, :households, r)]
+        eeseccoef[(e, :households, r)] = denom == 0 ? 0.0 : eesec0[(e, :households, r)] / denom
+        denom = eusecoef0[(e, :htrn, r)]
+        eeseccoef[(e, :htrn, r)] = denom == 0 ? 0.0 : eesec0[(e, :htrn, r)] / denom
+    end
+
+    for r in REGIONS, e in ENERGY
+        total = 0.0
+        for g in SECTORS
+            g == :elec && continue
+            total += e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
+        end
+        total += e == :roil ? sum(elecin[(t, :roil, r)] * cr(:roil, :elec, r) for t in TECH) : sum(elecin[(t, e, r)] for t in TECH)
+        total += e == :roil ? encep[(e, r)] * cr(:roil, :final, r) + tfo[r] * cr(:roil, :final, r) : encep[(e, r)]
+        pac0[(e, r)] = total
+    end
 
     for r in REGIONS
         elexp0[r] = g("xp0", (r, :elec))
@@ -458,9 +514,24 @@ function prepare(dat_path, elec_path, satellite)
         elas, esup, esube, sigu, delas, cr, wst,
         a0, d0, dout_pd, dout_pdb, dout_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
-        purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep,
+        purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, eesec0, eusecoef0, eeseccoef, kapital, labor, rgdp0,
     )
 end
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
