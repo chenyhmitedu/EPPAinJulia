@@ -278,3 +278,147 @@ function pop_ratio(data, r, year, next)
     return a == 0 ? 1.0 : b / a
 end
 
+
+
+function load_gms_table(lines)
+    body = String[]
+    inside = false
+    for ln in lines
+        s = strip(ln)
+        if !inside
+            startswith(lowercase(s), "table ") && (inside = true)
+            continue
+        end
+        startswith(s, ";") && break
+        (isempty(s) || startswith(s, "*")) && continue
+        push!(body, s)
+    end
+    isempty(body) && return Dict{Tuple,Float64}()
+    data = Dict{Tuple,Float64}()
+    header = nothing
+    for ln in body
+        toks = split(ln)
+        vals = Float64[]
+        while !isempty(toks)
+            v = tryparse(Float64, toks[end])
+            v === nothing && break
+            push!(vals, v)
+            pop!(toks)
+        end
+        reverse!(vals)
+        if isempty(vals)
+            labs = Symbol.(lowercase.(toks))
+            if header === nothing && length(labs) >= 1
+                header = labs
+            end
+            continue
+        end
+        header === nothing && continue
+        length(vals) == length(header) || continue
+        labs = Symbol[]
+        for t in toks
+            t == "." && continue
+            push!(labs, Symbol(lowercase(t)))
+        end
+        isempty(labs) && continue
+        for (j, reg) in enumerate(header)
+            data[(labs..., reg)] = vals[j]
+        end
+    end
+    return data
+end
+
+function load_assigns(lines)
+    data = Dict{Symbol,Float64}()
+    rx = r"\(\s*\"([^\"]+)\"\s*\)\s*=\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?)"
+    for ln in lines
+        m = match(rx, ln)
+        m === nothing && continue
+        data[Symbol(lowercase(m.captures[1]))] = parse(Float64, m.captures[2])
+    end
+    return data
+end
+
+function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
+    _pt(msg) = begin
+        verbose || return nothing
+        println("prepare: ", msg)
+        flush(stdout)
+        return nothing
+    end
+    wanted = Set([
+        "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
+        "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
+        "ti", "tf", "tp", "tg", "pg0", "pc0", "pf0", "ptxy0",
+        "tx", "tm", "wtflow0", "vtwr", "savf0", "cons0", "kapdg0", "labdg0", "trg0",
+        "efd", "savh0", "eind",
+    ])
+    _pt("start reading main GAMS data")
+    t_main = @elapsed p = load_gams_dat(dat_path, wanted)
+    _pt("finished main GAMS data in $(round(t_main; digits = 2)) s")
+
+    xa0 = Dict{Tuple,Float64}()
+    for (key, v) in p["xdp0"]
+        xa0[key] = v
+    end
+    for (key, v) in p["xmp0"]
+        xa0[key] = get(xa0, key, 0.0) + v
+    end
+    p["xa0"] = xa0
+
+    _pt("start reading electricity GAMS data")
+    t_elec = @elapsed e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_"]))
+    _pt("finished electricity GAMS data in $(round(t_elec; digits = 2)) s")
+
+    _pt("start reading satellite workbook")
+    t_xlsx = @elapsed book = satellite_lines(satellite, (
+        "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
+        "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
+        "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
+        "readgtap_ej_use_iea", "readgtap_eprod_iea",
+        "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
+    ))
+    _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
+
+    _pt("start parsing satellite tables")
+    t_tables = @elapsed begin
+        selas = load_gms_table(book["eppaelas_selas"])
+        for (k, v) in selas
+            if length(k) == 3 && k[2] == :noe_el
+                selas[k] = 3v
+            end
+        end
+        esup = load_gms_table(book["eppaelas_esup"])
+        esube = load_gms_table(book["eppaelas_esube"])
+        sigu = load_gms_table(book["eppaelas_sigu"])
+        delas_raw = Dict{Tuple,Float64}()
+        for ln in book["eppaelas_d_elas"]
+            s = strip(ln)
+            (isempty(s) || startswith(s, "*") || startswith(s, "/") || startswith(lowercase(s), "parameter")) && continue
+            parts = split(s)
+            length(parts) < 2 && continue
+            v = tryparse(Float64, parts[end])
+            v === nothing && continue
+            delas_raw[(Symbol(lowercase(parts[1])),)] = v
+        end
+        delas = delas_raw
+        crtable = load_gms_table(book["eppacalib_crtable"])
+        bio = load_gms_table(book["readgtap_bio"])
+        nhreta = load_gms_table(book["elecpower_nhreta"])
+        wst = load_gms_table(book["elecpower_wstsigma"])
+        os = load_assigns(book["eppa_htrn_os"])
+        esh = load_assigns(book["eppa_htrn_es"])
+        mvh = load_assigns(book["eppa_htrn_mvh"])
+        ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
+        eprod_iea = load_gms_table(book["readgtap_eprod_iea"])
+        hist = load_t_table(book["eppatrend_histrgdp"])
+        ann = load_t_table(book["eppatrend_argdpgrrate"])
+        pop = load_t_table(book["eppatrend_popa_eppa"])
+        aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
+    end
+    _pt("finished parsing satellite tables in $(round(t_tables; digits = 2)) s")
+
+    g(name, key) = get(p[name], key, 0.0)
+    ge(name, key) = get(e[name], key, 0.0)
+    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, hist, ann, pop, aeeigr_raw)
+end
