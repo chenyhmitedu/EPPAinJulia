@@ -238,6 +238,13 @@ function record_eesec!(store, MGE, year; energies = ENERGY, users = EJUSE_SECTOR
     return store
 end
 
+function record_aeei!(store, st, year; sectors = SECTORS, regions = REGIONS)
+    for r in regions, i in sectors
+        store[(year, i, r)] = _level(st.aeei[i, r])
+    end
+    return store
+end
+
 function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", scenario = "")
     simu = Int(simu)
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
@@ -251,6 +258,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     JuMP.unset_silent(jump_model(MGE))
     rows = NamedTuple[]
     eesec_ts = Dict{Tuple{Int,Symbol,Symbol,Symbol},Float64}()
+    aeei_ts = Dict{Tuple{Int,Symbol,Symbol},Float64}()
     if !isempty(csv)
         open(csv, "w") do io
             println(io, "year,region,gprod,rgdp,target,status")
@@ -272,6 +280,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
         if simu == 1 && !(iter0 && k == 1)
             _install_gprod!(st, bau, year)
         end
+        _set_aeei!(st, data, year)
         if iter0 && k == 1
             stt = termination_status(jump_model(MGE))
         elseif k == 1
@@ -323,23 +332,14 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
             break
         end
         record_eesec!(eesec_ts, MGE, year)
+        record_aeei!(aeei_ts, st, year)
         _save_point!(MGE, spdir, year)
         finished = year == years[end]
     end
     if simu == 0 && finished
         _save_bau(rows)
     end
-    return MGE, st, rows, eesec_ts
+    return MGE, st, rows, eesec_ts, aeei_ts
 end
 
 end
-
-
-
-
-
-
-
-
-
-

@@ -5,6 +5,7 @@ Pkg.instantiate()
 using EPPAinJulia
 using MPSGE: solve!
 using XLSX
+using Dates
 
 casefile = isempty(ARGS) ? joinpath(@__DIR__, "active", "refcalib.jl") : ARGS[1]
 if !isabspath(casefile)
@@ -14,23 +15,33 @@ end
 include(casefile)
 casename = splitext(basename(casefile))[1]
 
+function stamp(msg)
+    println("[", Dates.format(now(), "HH:MM:SS"), "] ", msg)
+    flush(stdout)
+end
+
 here = joinpath(@__DIR__, "data")
-data = prepare(
+stamp("starting data preparation")
+t_prepare = @elapsed data = prepare(
     joinpath(here, "eppa8data_2017.dat"),
     joinpath(here, "eppa8data_elec_2017.dat"),
     joinpath(here, "satellite.xlsx"),
 )
+stamp("finished data preparation in $(round(t_prepare; digits = 2)) s")
 println("regions ", length(data.REGIONS))
 
 println("\n================ base-year calibration check ================")
 flush(stdout)
-MGE = EPPA_model(data, -1; simu)
-solve!(MGE, cumulative_iteration_limit = 0)
-
+stamp("starting EPPA_model build")
+t_build = @elapsed MGE = EPPA_model(data, -1; simu)
+stamp("finished EPPA_model build in $(round(t_build; digits = 2)) s")
+stamp("starting zero-iteration benchmark solve")
+t_bench = @elapsed solve!(MGE, cumulative_iteration_limit = 0)
+stamp("finished zero-iteration benchmark solve in $(round(t_bench; digits = 2)) s")
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, casename * ".xlsx")
-MGE, st, rows, eesec_ts = run_scenario(data; simu, scenario = casename)
+MGE, st, rows, eesec_ts, aeei_ts = run_scenario(data; simu, scenario = casename)
 
 XLSX.openxlsx(path, mode = "w") do xf
     ej = XLSX.addsheet!(xf, "EESEC")
@@ -47,6 +58,20 @@ XLSX.openxlsx(path, mode = "w") do xf
         ej[row, 3] = String(user)
         ej[row, 4] = String(region)
         ej[row, 5] = value
+    end
+
+    asheet = XLSX.addsheet!(xf, "AEEI")
+    asheet[1, 1] = "year"
+    asheet[1, 2] = "sector"
+    asheet[1, 3] = "region"
+    asheet[1, 4] = "aeei"
+    for (i, (key, value)) in enumerate(sort!(collect(aeei_ts); by = x -> x.first))
+        year, sector, region = key
+        row = i + 1
+        asheet[row, 1] = year
+        asheet[row, 2] = String(sector)
+        asheet[row, 3] = String(region)
+        asheet[row, 4] = value
     end
 
     stsheet = XLSX.addsheet!(xf, "solve_status")
@@ -112,5 +137,3 @@ if simu == 1 && isfile(joinpath(out, "refcalib.xlsx"))
     println("replication max |rgdp_ref / GDP target - 1| ", dtarget)
     flush(stdout)
 end
-
-

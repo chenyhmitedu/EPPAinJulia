@@ -98,6 +98,7 @@ follows `elecpower.gms` and rewrites local copies of `elecin`. A production
 identity is checked for the non-electricity GTAP sectors.
 """
 function prepare(dat_path, elec_path, satellite)
+    _pt(msg) = (println("prepare: ", msg); flush(stdout))
     wanted = Set([
         "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
         "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
@@ -105,7 +106,9 @@ function prepare(dat_path, elec_path, satellite)
         "tx", "tm", "wtflow0", "vtwr", "savf0", "cons0", "kapdg0", "labdg0", "trg0",
         "efd", "savh0", "eind",
     ])
-    p = load_gams_dat(dat_path, wanted)
+    _pt("start reading main GAMS data")
+    t_main = @elapsed p = load_gams_dat(dat_path, wanted)
+    _pt("finished main GAMS data in $(round(t_main; digits = 2)) s")
     xa0 = Dict{Tuple,Float64}()
     for (key, v) in p["xdp0"]
         xa0[key] = v
@@ -114,17 +117,23 @@ function prepare(dat_path, elec_path, satellite)
         xa0[key] = get(xa0, key, 0.0) + v
     end
     p["xa0"] = xa0
-    e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_"]))
+    _pt("start reading electricity GAMS data")
+    t_elec = @elapsed e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_"]))
+    _pt("finished electricity GAMS data in $(round(t_elec; digits = 2)) s")
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
 
-    book = satellite_lines(satellite, (
+    _pt("start reading satellite workbook")
+    t_xlsx = @elapsed book = satellite_lines(satellite, (
         "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
         "readgtap_ej_use_iea", "readgtap_eprod_iea",
-        "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa",
+        "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
     ))
+    _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
+    _pt("start parsing satellite tables")
+    t_tables = @elapsed begin
     selas = load_gms_table(book["eppaelas_selas"])
     for (k, v) in selas
         if length(k) == 3 && k[2] == :noe_el
@@ -157,10 +166,22 @@ function prepare(dat_path, elec_path, satellite)
     hist = load_t_table(book["eppatrend_histrgdp"])
     ann = load_t_table(book["eppatrend_argdpgrrate"])
     pop = load_t_table(book["eppatrend_popa_eppa"])
+    aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
+    end
+    _pt("finished parsing satellite tables in $(round(t_tables; digits = 2)) s")
 
     elas(g, layer, r) = get(selas, (g, layer, r), 0.0)
     cr(i, g, r) = i == :roil ? get(crtable, (g, r), 0.0) : 1.0
 
+    aeeigr = Dict{Tuple{Symbol,Symbol},Float64}()
+    aeei = Dict{Tuple{Symbol,Symbol},Float64}()
+    for r in REGIONS, i in SECTORS
+        aeeigr[(i, r)] = get(aeeigr_raw, (i, r), get(aeeigr_raw, (r, i), 0.0))
+        aeei[(i, r)] = 1.0
+    end
+
+    _pt("start benchmark calibration assembly")
+    t_assemble = @elapsed begin
     ffact = Dict{Tuple{Symbol,Symbol},Float64}()
     ffend0 = Dict{Tuple{Symbol,Symbol},Float64}()
     ffgprod0 = Dict{Tuple{Symbol,Symbol},Float64}()
@@ -509,6 +530,8 @@ function prepare(dat_path, elec_path, satellite)
     end
     println("benchmark identity |xp-tax-cost|=", gap, " |elec xp*(1-td)-cost|=", egap)
 
+    end
+    _pt("finished benchmark calibration assembly in $(round(t_assemble; digits = 2)) s")
     return (;
         p, g, ge, REGIONS, SECTORS, hist, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
@@ -516,9 +539,12 @@ function prepare(dat_path, elec_path, satellite)
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, eesec0, eusecoef0, eeseccoef, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, eesec0, eusecoef0, eeseccoef, kapital, labor, rgdp0,
     )
 end
+
+
+
 
 
 

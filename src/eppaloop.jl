@@ -1,3 +1,16 @@
+function _aeei_factor(data, i, r, year)
+    base = YEARS[1]
+    years = max(year - base, 0)
+    gr = get(data.aeeigr, (i, r), 0.0)
+    return (1 + gr)^(-years)
+end
+
+function _set_aeei!(st, data, year)
+    for r in st.R, i in SECTORS
+        set_value!(st.aeei[i, r], _aeei_factor(data, i, r, year))
+    end
+    return nothing
+end
 function _boost(r, ord)
     ord > 5 && return 1.0
     return r == :mex ? 1.05^(5 - ord) : 1.10^(6 - ord)
@@ -157,5 +170,6 @@ function _advance_and_solve!(MGE, st, data, year, next)
     _plant!(st, old, 1.0)
     return stt_last
 end
+
 
 

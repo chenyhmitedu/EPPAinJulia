@@ -164,14 +164,74 @@ function gms_lines(sheet)
     return lines
 end
 
+function satellite_cache_path(path)
+    return path * ".cache.jld2"
+end
+
+function satellite_signature(path)
+    st = stat(path)
+    return (
+        path = abspath(path),
+        size = st.size,
+        mtime = Float64(mtime(path)),
+    )
+end
+
+function satellite_cache_valid(meta, path, names)
+    meta === nothing && return false
+    meta_path = get(meta, :path, nothing)
+    meta_size = get(meta, :size, nothing)
+    meta_mtime = get(meta, :mtime, nothing)
+    meta_names = get(meta, :names, nothing)
+    sig = satellite_signature(path)
+    want = collect(String.(names))
+    return meta_path == sig.path &&
+           meta_size == sig.size &&
+           meta_mtime == sig.mtime &&
+           meta_names == want
+end
+
+function satellite_cache_read(cache_path, path, names)
+    isfile(cache_path) || return nothing
+    data = try
+        JLD2.load(cache_path)
+    catch
+        return nothing
+    end
+    meta = get(data, "meta", nothing)
+    satellite_cache_valid(meta, path, names) || return nothing
+    book = get(data, "book", nothing)
+    book isa Dict || return nothing
+    return Dict(String(k) => Vector{String}(v) for (k, v) in pairs(book))
+end
+
+function satellite_cache_write(cache_path, path, names, book)
+    meta = Dict(
+        :path => abspath(path),
+        :size => stat(path).size,
+        :mtime => Float64(mtime(path)),
+        :names => collect(String.(names)),
+    )
+    try
+        JLD2.save(cache_path, "meta", meta, "book", book)
+    catch
+    end
+    return nothing
+end
 """
     satellite_lines(path, names)
 
-Text rows of the named sheets in `satellite.xlsx`.
+Text rows of the named sheets in `satellite.xlsx`. A cache is used when the
+workbook path, size, modification time, and requested sheet names still match.
 """
 function satellite_lines(path, names)
+    cache_path = satellite_cache_path(path)
+    cached = satellite_cache_read(cache_path, path, names)
+    cached !== nothing && return cached
     xf = XLSX.readxlsx(path)
-    return Dict(name => gms_lines(xf[name]) for name in names)
+    book = Dict(String(name) => gms_lines(xf[String(name)]) for name in names)
+    satellite_cache_write(cache_path, path, names, book)
+    return book
 end
 
 function load_benchmark(dat_path, satellite)
