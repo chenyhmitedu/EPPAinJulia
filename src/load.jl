@@ -1,4 +1,4 @@
-"""
+﻿"""
     load_years(path)
 
 Read the solve periods from a text file. Blank lines and lines that start with `*` or `#` are ignored.
@@ -144,6 +144,8 @@ function gms_token(cell)
     end
 end
 
+const SATELLITE_CACHE_VERSION = 4
+
 """
     gms_lines(sheet)
 
@@ -155,11 +157,20 @@ function gms_lines(sheet)
     for row in eachrow(data)
         parts = String[]
         for cell in row
-            (cell === missing || cell === nothing || cell == "") && continue
-            push!(parts, gms_token(cell))
+            if cell === missing || cell === nothing || cell == ""
+                push!(parts, "")
+            else
+                push!(parts, gms_token(cell))
+            end
         end
-        isempty(parts) && continue
-        push!(lines, join(parts, " "))
+        while !isempty(parts) && isempty(parts[end])
+            pop!(parts)
+        end
+        if all(isempty, parts)
+            push!(lines, "")
+            continue
+        end
+        push!(lines, join(parts, '\t'))
     end
     return lines
 end
@@ -179,13 +190,15 @@ end
 
 function satellite_cache_valid(meta, path, names)
     meta === nothing && return false
+    meta_version = get(meta, :version, nothing)
     meta_path = get(meta, :path, nothing)
     meta_size = get(meta, :size, nothing)
     meta_mtime = get(meta, :mtime, nothing)
     meta_names = get(meta, :names, nothing)
     sig = satellite_signature(path)
     want = collect(String.(names))
-    return meta_path == sig.path &&
+    return meta_version == SATELLITE_CACHE_VERSION &&
+           meta_path == sig.path &&
            meta_size == sig.size &&
            meta_mtime == sig.mtime &&
            meta_names == want
@@ -207,6 +220,7 @@ end
 
 function satellite_cache_write(cache_path, path, names, book)
     meta = Dict(
+        :version => SATELLITE_CACHE_VERSION,
         :path => abspath(path),
         :size => stat(path).size,
         :mtime => Float64(mtime(path)),
@@ -280,7 +294,7 @@ end
 
 
 
-function load_gms_table(lines)
+function load_gms_table(lines; duplicate = :last)
     body = String[]
     inside = false
     for ln in lines
@@ -290,39 +304,52 @@ function load_gms_table(lines)
             continue
         end
         startswith(s, ";") && break
-        (isempty(s) || startswith(s, "*")) && continue
+        if isempty(s)
+            !isempty(body) && break
+            continue
+        end
+        startswith(s, "*") && continue
         push!(body, s)
     end
     isempty(body) && return Dict{Tuple,Float64}()
     data = Dict{Tuple,Float64}()
     header = nothing
     for ln in body
-        toks = split(ln)
-        vals = Float64[]
-        while !isempty(toks)
-            v = tryparse(Float64, toks[end])
-            v === nothing && break
-            push!(vals, v)
-            pop!(toks)
-        end
-        reverse!(vals)
-        if isempty(vals)
-            labs = Symbol.(lowercase.(toks))
+        toks = occursin('\t', ln) ? split(ln, '\t'; keepempty = true) : split(strip(ln))
+        if header === nothing
+            labs = Symbol[]
+            for t in toks
+                s = strip(t)
+                isempty(s) && continue
+                push!(labs, Symbol(lowercase(s)))
+            end
             if header === nothing && length(labs) >= 1
                 header = labs
             end
             continue
         end
-        header === nothing && continue
-        length(vals) == length(header) || continue
+        length(toks) >= length(header) || continue
+        val_toks = toks[(end - length(header) + 1):end]
+        vals = Vector{Union{Nothing,Float64}}(undef, length(header))
+        for j in eachindex(val_toks)
+            s = strip(val_toks[j])
+            vals[j] = isempty(s) || s == "." ? nothing : tryparse(Float64, s)
+        end
+        all(v -> v === nothing, vals) && continue
         labs = Symbol[]
-        for t in toks
-            t == "." && continue
-            push!(labs, Symbol(lowercase(t)))
+        for t in toks[1:(end - length(header))]
+            s = strip(t)
+            (isempty(s) || s == ".") && continue
+            push!(labs, Symbol(lowercase(s)))
         end
         isempty(labs) && continue
         for (j, reg) in enumerate(header)
-            data[(labs..., reg)] = vals[j]
+            vals[j] === nothing && continue
+            key = (labs..., reg)
+            if duplicate == :first && haskey(data, key)
+                continue
+            end
+            data[key] = vals[j]
         end
     end
     return data
@@ -375,7 +402,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
-        "readgtap_ej_use_iea", "readgtap_eprod_iea",
+        "readgtap_ej_use_iea", "readgtap_eprod_iea", "other_epslon",
         "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
     ))
     _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
@@ -402,7 +429,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
             delas_raw[(Symbol(lowercase(parts[1])),)] = v
         end
         delas = delas_raw
-        crtable = load_gms_table(book["eppacalib_crtable"])
+        crtable = load_gms_table(book["eppacalib_crtable"]; duplicate = :first)
         bio = load_gms_table(book["readgtap_bio"])
         nhreta = load_gms_table(book["elecpower_nhreta"])
         wst = load_gms_table(book["elecpower_wstsigma"])
@@ -411,6 +438,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         mvh = load_assigns(book["eppa_htrn_mvh"])
         ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
         eprod_iea = load_gms_table(book["readgtap_eprod_iea"])
+        epslon_raw = load_gms_table(book["other_epslon"])
         hist = load_t_table(book["eppatrend_histrgdp"])
         ann = load_t_table(book["eppatrend_argdpgrrate"])
         pop = load_t_table(book["eppatrend_popa_eppa"])
@@ -420,5 +448,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
 
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, hist, ann, pop, aeeigr_raw)
+    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, epslon_raw, hist, ann, pop, aeeigr_raw)
 end
+
+

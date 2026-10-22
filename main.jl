@@ -41,7 +41,7 @@ stamp("finished zero-iteration benchmark solve in $(round(t_bench; digits = 2)) 
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, casename * ".xlsx")
-MGE, st, rows, eesec_ts, aeei_ts = run_scenario(data; simu, scenario = casename)
+MGE, st, rows, eesec_ts, sco2_ts, aeei_ts = run_scenario(data; simu, scenario = casename)
 
 XLSX.openxlsx(path, mode = "w") do xf
     ej = XLSX.addsheet!(xf, "EESEC")
@@ -58,6 +58,22 @@ XLSX.openxlsx(path, mode = "w") do xf
         ej[row, 3] = String(user)
         ej[row, 4] = String(region)
         ej[row, 5] = value
+    end
+
+    csheet = XLSX.addsheet!(xf, "SCO2")
+    csheet[1, 1] = "year"
+    csheet[1, 2] = "energy"
+    csheet[1, 3] = "user"
+    csheet[1, 4] = "region"
+    csheet[1, 5] = "sco2"
+    for (i, (key, value)) in enumerate(sort!(collect(sco2_ts); by = x -> x.first))
+        year, energy, user, region = key
+        row = i + 1
+        csheet[row, 1] = year
+        csheet[row, 2] = String(energy)
+        csheet[row, 3] = String(user)
+        csheet[row, 4] = String(region)
+        csheet[row, 5] = value
     end
 
     asheet = XLSX.addsheet!(xf, "AEEI")

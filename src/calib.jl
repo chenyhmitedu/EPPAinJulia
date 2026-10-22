@@ -1,6 +1,5 @@
-const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
+﻿const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
 const SECTORS = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
-const EJUSE_SECTORS = [SECTORS..., :households, :htrn]
 const NE = [:crop, :live, :fors, :food, :eint, :othr, :serv, :tran, :dwe]
 const NENDT = [:crop, :live, :fors, :food, :eint, :othr, :serv]
 const AENOE = [:coal, :oil, :gas, :roil, :crop, :live, :fors, :elec, :eint]
@@ -14,6 +13,10 @@ const TECH_F = [:cele, :gele, :oele]
 const TECH_NHR = [:nele, :hele, :rele]
 const TECH_N = [:sele, :wele]
 const TECH_D = [:cele, :gele, :oele, :hele, :nele, :rele]
+const AC_SECTORS = [:industry, :htrn, :households]
+const EJUSE_SECTORS = [filter(!=(:elec), SECTORS)..., TECH..., :households, :htrn]
+const SCO2_ENERGY = [:coal, :gas, :roil]
+const SCO2_SECTORS = [filter(!=(:elec), SECTORS)..., TECH..., :households, :htrn]
 const PDE_DIM = [:dispgen, TECH_F..., TECH_N..., :tnd]
 const NOT_AENOE = [:food, :othr, :serv, :tran, :dwe]
 
@@ -60,19 +63,35 @@ function prepare(dat_path, elec_path, satellite)
     mvh = raw.mvh
     ej_use_iea = raw.ej_use_iea
     eprod_iea = raw.eprod_iea
+    epslon_raw = raw.epslon_raw
     hist = raw.hist
     ann = raw.ann
     pop = raw.pop
     aeeigr_raw = raw.aeeigr_raw
 
     elas(g, layer, r) = get(selas, (g, layer, r), 0.0)
-    cr(i, g, r) = i == :roil ? get(crtable, (g, r), 0.0) : 1.0
+    function cr(i, g, r)
+        i == :roil || return 1.0
+        val = get(crtable, (g, r), 0.0)
+        return val == 0.0 ? 1.0 : val
+    end
+    epslon_map = Dict{Symbol,Float64}()
+    for e in SCO2_ENERGY
+        vals = [v for (k, v) in epslon_raw if !isempty(k) && first(k) == e]
+        length(vals) == 1 || error("expected exactly one emissions coefficient for $(e) in other_epslon, got $(length(vals))")
+        epslon_map[e] = vals[1]
+    end
+    epslon(e) = epslon_map[e]
 
     aeeigr = Dict{Tuple{Symbol,Symbol},Float64}()
     aeei = Dict{Tuple{Symbol,Symbol},Float64}()
+    sco2coef = Dict{Symbol,Float64}()
     for r in REGIONS, i in SECTORS
         aeeigr[(i, r)] = get(aeeigr_raw, (i, r), get(aeeigr_raw, (r, i), 0.0))
         aeei[(i, r)] = 1.0
+    end
+    for e in SCO2_ENERGY
+        sco2coef[e] = 100 * (44 / 12) * epslon(e)
     end
 
     _pt("start benchmark calibration assembly")
@@ -163,7 +182,7 @@ function prepare(dat_path, elec_path, satellite)
     xh = Dict{Tuple{Symbol,Symbol},Float64}()
     ence = Dict{Tuple{Symbol,Symbol},Float64}()
     encep = Dict{Tuple{Symbol,Symbol},Float64}()
-    pac0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    pac0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
         purtrn[r] = g("xdc0", (r, :tran)) + g("xmc0", (r, :tran))
         xdc[(r, :tran)] = 0.0
@@ -317,6 +336,7 @@ function prepare(dat_path, elec_path, satellite)
 
     gv = g
     ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
+    sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
         coalden = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
         gasden = sum(gv("eind", (:gas, g, r)) for g in SECTORS) + gv("efd", (:gas, r))
@@ -353,15 +373,23 @@ function prepare(dat_path, elec_path, satellite)
         eeseccoef[(e, :htrn, r)] = denom == 0 ? 0.0 : eesec0[(e, :htrn, r)] / denom
     end
 
+    for r in REGIONS, i_ in TECH, e in ENERGY
+        eesec0[(e, i_, r)] = e == :roil ? eeseccoef[(e, :elec, r)] * elecin[(i_, :roil, r)] : eeseccoef[(e, :elec, r)] * elecin[(i_, e, r)]
+        eusecoef0[(e, i_, r)] = e == :roil ? elecin[(i_, :roil, r)] * cr(:roil, :elec, r) : elecin[(i_, e, r)]
+        denom = eusecoef0[(e, i_, r)]
+        eeseccoef[(e, i_, r)] = denom == 0 ? 0.0 : eesec0[(e, i_, r)] / denom
+    end
+
     for r in REGIONS, e in ENERGY
-        total = 0.0
+        industry = 0.0
         for g in SECTORS
             g == :elec && continue
-            total += e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
+            industry += e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
         end
-        total += e == :roil ? sum(elecin[(t, :roil, r)] * cr(:roil, :elec, r) for t in TECH) : sum(elecin[(t, e, r)] for t in TECH)
-        total += e == :roil ? encep[(e, r)] * cr(:roil, :final, r) + tfo[r] * cr(:roil, :final, r) : encep[(e, r)]
-        pac0[(e, r)] = total
+        industry += e == :roil ? sum(elecin[(t, :roil, r)] * cr(:roil, :elec, r) for t in TECH) : sum(elecin[(t, e, r)] for t in TECH)
+        pac0[(e, :industry, r)] = industry
+        pac0[(e, :households, r)] = e == :roil ? encep[(e, r)] * cr(:roil, :final, r) : encep[(e, r)]
+        pac0[(e, :htrn, r)] = e == :roil ? tfo[r] * cr(:roil, :final, r) : 0.0
     end
 
     for r in REGIONS
@@ -425,6 +453,22 @@ function prepare(dat_path, elec_path, satellite)
     end
     println("benchmark identity |xp-tax-cost|=", gap, " |elec xp*(1-td)-cost|=", egap)
 
+    for r in REGIONS, g in SECTORS
+        g == :elec && continue
+        for e in SCO2_ENERGY
+            sco20[(e, g, r)] = sco2coef[e] * eesec0[(e, g, r)]
+        end
+    end
+
+    for r in REGIONS, i_ in TECH, e in SCO2_ENERGY
+        sco20[(e, i_, r)] = sco2coef[e] * eesec0[(e, i_, r)]
+    end
+
+    for r in REGIONS, e in SCO2_ENERGY
+        sco20[(e, :households, r)] = sco2coef[e] * eesec0[(e, :households, r)]
+        sco20[(e, :htrn, r)] = sco2coef[e] * eesec0[(e, :htrn, r)]
+    end
+
     end
     _pt("finished benchmark calibration assembly in $(round(t_assemble; digits = 2)) s")
     return (;
@@ -434,28 +478,9 @@ function prepare(dat_path, elec_path, satellite)
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, eesec0, eusecoef0, eeseccoef, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, eesec0, eusecoef0, eeseccoef, sco2coef, sco20, kapital, labor, rgdp0,
     )
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 

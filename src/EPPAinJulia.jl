@@ -22,7 +22,7 @@ using MPSGE
 using PATHSolver
 using XLSX
 
-export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!
+export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -238,6 +238,13 @@ function record_eesec!(store, MGE, year; energies = ENERGY, users = EJUSE_SECTOR
     return store
 end
 
+function record_sco2!(store, MGE, year; energies = SCO2_ENERGY, users = SCO2_SECTORS, regions = REGIONS)
+    for r in regions, g in users, e in energies
+        store[(year, e, g, r)] = _level(MGE[:SCO2][e, g, r])
+    end
+    return store
+end
+
 function record_aeei!(store, st, year; sectors = SECTORS, regions = REGIONS)
     for r in regions, i in sectors
         store[(year, i, r)] = _level(st.aeei[i, r])
@@ -258,6 +265,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     JuMP.unset_silent(jump_model(MGE))
     rows = NamedTuple[]
     eesec_ts = Dict{Tuple{Int,Symbol,Symbol,Symbol},Float64}()
+    sco2_ts = Dict{Tuple{Int,Symbol,Symbol,Symbol},Float64}()
     aeei_ts = Dict{Tuple{Int,Symbol,Symbol},Float64}()
     if !isempty(csv)
         open(csv, "w") do io
@@ -332,6 +340,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
             break
         end
         record_eesec!(eesec_ts, MGE, year)
+        record_sco2!(sco2_ts, MGE, year)
         record_aeei!(aeei_ts, st, year)
         _save_point!(MGE, spdir, year)
         finished = year == years[end]
@@ -339,7 +348,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     if simu == 0 && finished
         _save_bau(rows)
     end
-    return MGE, st, rows, eesec_ts, aeei_ts
+    return MGE, st, rows, eesec_ts, sco2_ts, aeei_ts
 end
 
 end
