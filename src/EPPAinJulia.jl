@@ -22,7 +22,7 @@ using MPSGE
 using PATHSolver
 using XLSX
 
-export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!
+export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!, write_report, replication_error
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -33,6 +33,7 @@ include("nests.jl")
 include("smooth.jl")
 include("eppacore.jl")
 include("eppaloop.jl")
+include("report.jl")
 
 function __init__()
     apply_smooth!()

@@ -482,6 +482,52 @@ function prepare(dat_path, elec_path, satellite)
     )
 end
 
+"""
+    replication_error(calib_path, sim_path)
+
+Largest gaps between a `simu = 0` workbook and a `simu = 1` workbook.
+
+Returns the maximum absolute `gprod` gap, the maximum relative `rgdp` gap, and
+the maximum relative gap between the `simu = 1` GDP and the calibration target.
+"""
+function replication_error(calib_path, sim_path)
+    loadrows(p) = begin
+        outd = Dict{Tuple{Int,Symbol},NamedTuple}()
+        XLSX.openxlsx(p) do xf
+            sh = xf["solve_status"]
+            for i in 2:XLSX.nrow(sh)
+                y = sh[i, 1]
+                r = sh[i, 2]
+                g = sh[i, 3]
+                rg = sh[i, 4]
+                tg = sh[i, 5]
+                if isnothing(y) || isnothing(r)
+                    continue
+                end
+                outd[(Int(y), Symbol(r))] = (
+                    gprod = Float64(g),
+                    rgdp = Float64(rg),
+                    target = Float64(tg),
+                )
+            end
+        end
+        return outd
+    end
+    a = loadrows(calib_path)
+    b = loadrows(sim_path)
+    dprod = 0.0
+    dgdp = 0.0
+    dtarget = 0.0
+    for (k, va) in a
+        vb = b[k]
+        dprod = max(dprod, abs(vb.gprod - va.gprod))
+        dgdp = max(dgdp, abs(vb.rgdp / va.rgdp - 1))
+        dtarget = max(dtarget, abs(vb.rgdp / va.target - 1))
+    end
+    return dprod, dgdp, dtarget
+end
+
+
 
 
 
