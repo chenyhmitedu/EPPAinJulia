@@ -495,7 +495,9 @@ function replication_error(calib_path, sim_path)
         outd = Dict{Tuple{Int,Symbol},NamedTuple}()
         XLSX.openxlsx(p) do xf
             sh = xf["solve_status"]
-            for i in 2:XLSX.nrow(sh)
+            dim = XLSX.get_dimension(sh)
+            last = dim === nothing ? 1 : dim.stop.row_number
+            for i in 2:last
                 y = sh[i, 1]
                 r = sh[i, 2]
                 g = sh[i, 3]
