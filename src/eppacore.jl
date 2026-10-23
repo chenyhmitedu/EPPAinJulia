@@ -132,6 +132,7 @@ function _build_model(B, simu::Integer = 0)
         RGDP[r=R],                                              (lower_bound = 0, start = B.rgdp0[r], description = "Real GDP")
         EESEC[e=ENERGY, g=EJUSE_SECTORS, r=R],                  (lower_bound = 0, start = B.eesec0[(e, g, r)], description = "Combusted energy use by energy, sector, and region in EJ")
         SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=R],               (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
+        FTOTCO2[r=R],                                           (lower_bound = 0, start = sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY, u in SCO2_SECTORS), description = "Total combusted CO2 by region in MtCO2")
     end)
 
     @consumers(MGE, begin
@@ -409,6 +410,11 @@ function _build_model(B, simu::Integer = 0)
 
     for r in R, g in SCO2_SECTORS, e in SCO2_ENERGY
         @aux_constraint(MGE, SCO2[e, g, r], SCO2[e, g, r] - B.sco2coef[e] * EESEC[e, g, r])
+    end
+
+    for r in R
+        @aux_constraint(MGE, FTOTCO2[r],
+            FTOTCO2[r] - sum(SCO2[e, g, r] for e in SCO2_ENERGY for g in SCO2_SECTORS))
     end
 
     for r in R

@@ -1,9 +1,9 @@
 """
-    write_report(path, rows, eesec_ts, sco2_ts, aeei_ts)
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
 
-Write the scenario workbook. Sheets are `EESEC`, `SCO2`, `AEEI`, and `solve_status`.
+Write the scenario workbook. Sheets are `EESEC`, `SCO2`, `FTOTCO2`, `AEEI`, and `solve_status`.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, aeei_ts)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EESEC")
         ej[1, 1] = "year"
@@ -35,6 +35,18 @@ function write_report(path, rows, eesec_ts, sco2_ts, aeei_ts)
             csheet[row, 3] = String(user)
             csheet[row, 4] = String(region)
             csheet[row, 5] = value
+        end
+
+        fsheet = XLSX.addsheet!(xf, "FTOTCO2")
+        fsheet[1, 1] = "year"
+        fsheet[1, 2] = "region"
+        fsheet[1, 3] = "ftotco2"
+        for (i, (key, value)) in enumerate(sort!(collect(ftotco2_ts); by = x -> x.first))
+            year, region = key
+            row = i + 1
+            fsheet[row, 1] = year
+            fsheet[row, 2] = String(region)
+            fsheet[row, 3] = value
         end
 
         asheet = XLSX.addsheet!(xf, "AEEI")
