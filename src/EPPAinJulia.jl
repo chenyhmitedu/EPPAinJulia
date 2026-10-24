@@ -20,6 +20,7 @@ using JuMP
 using JLD2
 using MPSGE
 using PATHSolver
+using Serialization
 using XLSX
 
 export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!, record_ftotco2!, write_report, replication_error
@@ -31,6 +32,7 @@ include("load.jl")
 include("calib.jl")
 include("nests.jl")
 include("smooth.jl")
+include("modelcache.jl")
 include("eppacore.jl")
 include("eppaloop.jl")
 include("report.jl")

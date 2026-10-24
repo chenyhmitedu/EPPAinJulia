@@ -3,12 +3,34 @@
 
 Build the MPSGE model for benchmark `B`.
 
-New methods are invisible to the call frame that loaded this file, so the model
-is rebuilt with `Base.invokelatest`.
+A previous build is reloaded from `cache/` when the Julia source, benchmark
+files, period list, and `simu` are unchanged. New methods are invisible to the
+call frame that loaded this file, so a cache miss rebuilds with `Base.invokelatest`.
 """
 function build_model(B; simu::Integer = 0)
     apply_smooth!()
-    return Base.invokelatest(_build_model, B, Int(simu))
+    simu = Int(simu)
+    key = _model_cache_key(simu)
+    loaded = try
+        _try_load_model_cache(key, simu)
+    catch err
+        println("model cache unreadable (", err, "); rebuilding")
+        flush(stdout)
+        nothing
+    end
+    if loaded !== nothing
+        println("model cache hit")
+        flush(stdout)
+        return loaded
+    end
+    MGE, st = Base.invokelatest(_build_model, B, simu)
+    try
+        _save_model_cache(key, simu, MGE, st)
+    catch err
+        println("model cache not saved (", err, ")")
+        flush(stdout)
+    end
+    return MGE, st
 end
 
 """
