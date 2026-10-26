@@ -339,6 +339,13 @@ function record_ftotco2!(store, MGE, year; regions = REGIONS)
     return store
 end
 
+function record_co2p!(store, MGE, st, year; regions = REGIONS)
+    for r in regions
+        store[(year, r)] = _level(MGE[:CP][r]) / st.cscale[r] * 1e4
+    end
+    return store
+end
+
 function record_aeei!(store, st, year; sectors = SECTORS, regions = REGIONS)
     for r in regions, i in sectors
         store[(year, i, r)] = _level(st.aeei[i, r])
@@ -364,6 +371,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     eesec_ts = Dict{Tuple{Int,Symbol,Symbol,Symbol},Float64}()
     sco2_ts = Dict{Tuple{Int,Symbol,Symbol,Symbol},Float64}()
     ftotco2_ts = Dict{Tuple{Int,Symbol},Float64}()
+    co2p_ts = Dict{Tuple{Int,Symbol},Float64}()
     aeei_ts = Dict{Tuple{Int,Symbol,Symbol},Float64}()
     if !isempty(csv)
         open(csv, "w") do io
@@ -442,6 +450,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
         record_eesec!(eesec_ts, MGE, year)
         record_sco2!(sco2_ts, MGE, year)
         record_ftotco2!(ftotco2_ts, MGE, year)
+        record_co2p!(co2p_ts, MGE, st, year)
         record_aeei!(aeei_ts, st, year)
         _save_point!(MGE, spdir, year)
         finished = year == years[end]
@@ -449,7 +458,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     if simu == 0 && finished
         _save_bau(rows, ftotco2_ts)
     end
-    return MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts
+    return MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts
 end
 
 end

@@ -506,7 +506,7 @@ function _build_model(B, simu::Integer = 0)
     end
 
     state = (; MGE, R, k0, l0, sav, grg, gdp0, aeei, GPROD, RGDP, gp0 = gp0_param, simu,
-        CT, co2cap, ftotco20,
+        CT, co2cap, ftotco20, cperv, cscale,
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
         labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
         inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())

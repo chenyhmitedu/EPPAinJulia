@@ -42,8 +42,8 @@ mkpath(out)
 path = joinpath(out, casename * ".xlsx")
 policy = isdefined(@__MODULE__, :policy) ? policy : :ref
 rer_fn = isdefined(@__MODULE__, :rer) ? rer : (r, t) -> 1.0
-MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts = run_scenario(data; simu, scenario = casename, policy, rer = rer_fn)
-write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
+MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts = run_scenario(data; simu, scenario = casename, policy, rer = rer_fn)
+write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts)
 println("wrote ", path)
 
 if simu == 1 && isfile(joinpath(out, "refcalib.xlsx"))

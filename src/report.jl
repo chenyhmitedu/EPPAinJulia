@@ -1,9 +1,10 @@
 """
-    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts)
 
-Write the scenario workbook. Sheets are `EESEC`, `SCO2`, `FTOTCO2`, `AEEI`, and `solve_status`.
+Write the scenario workbook. Sheets are `EESEC`, `SCO2`, `FTOTCO2`, `AEEI`, `co2p`, and `solve_status`.
+`co2p[r]` is `CP[r] / cscale[r] * 10^4`, in USD per tonne at base-year fuel prices. It is the same for every fuel and user.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EESEC")
         ej[1, 1] = "year"
@@ -61,6 +62,18 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
             asheet[row, 2] = String(sector)
             asheet[row, 3] = String(region)
             asheet[row, 4] = value
+        end
+
+        psheet = XLSX.addsheet!(xf, "co2p")
+        psheet[1, 1] = "year"
+        psheet[1, 2] = "region"
+        psheet[1, 3] = "co2p"
+        for (i, (key, value)) in enumerate(sort!(collect(co2p_ts); by = x -> x.first))
+            year, region = key
+            row = i + 1
+            psheet[row, 1] = year
+            psheet[row, 2] = String(region)
+            psheet[row, 3] = value
         end
 
         stsheet = XLSX.addsheet!(xf, "solve_status")
