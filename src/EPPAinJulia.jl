@@ -23,7 +23,7 @@ using PATHSolver
 using Serialization
 using XLSX
 
-export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!, record_ftotco2!, write_report, replication_error
+export load_benchmark, prepare, build_model, EPPA_model, run_scenario, set_model_years!, record_eesec!, record_sco2!, record_ftotco2!, write_report, replication_error, gams_table
 
 const PATH_LICENSE = "1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1000&PATH&GEN&31_12_2035&0_0_0&6000&0_0"
 const MOI = JuMP.MOI
@@ -36,6 +36,28 @@ include("modelcache.jl")
 include("eppacore.jl")
 include("eppaloop.jl")
 include("report.jl")
+
+"""
+    gams_table(text) -> Dict{Tuple{Symbol,Int},Float64}
+
+Read a GAMS-style table. The first line is the column headers (years). Each
+later line is a row label and one number per column.
+"""
+function gams_table(text::AbstractString)
+    lines = [strip(line) for line in split(text, '\n') if !isempty(strip(line)) && !startswith(lstrip(line), '*')]
+    isempty(lines) && error("gams table is empty")
+    years = [parse(Int, h) for h in split(lines[1])]
+    out = Dict{Tuple{Symbol,Int},Float64}()
+    for line in lines[2:end]
+        parts = split(line)
+        length(parts) == length(years) + 1 || error("row $(parts[1]) has $(length(parts) - 1) values, expected $(length(years))")
+        r = Symbol(parts[1])
+        for (t, v) in zip(years, parts[2:end])
+            out[(r, t)] = parse(Float64, v)
+        end
+    end
+    return out
+end
 
 function __init__()
     apply_smooth!()
@@ -155,11 +177,15 @@ function _bau_path()
     return normpath(joinpath(@__DIR__, "..", "data", "bau.jld2"))
 end
 
-function _save_bau(rows)
+function _save_bau(rows, ftotco2_ts)
     bau = Dict{Tuple{Symbol,Int},Dict{Symbol,Float64}}()
     for row in rows
         slot = get!(bau, (:gprod, row.year), Dict{Symbol,Float64}())
         slot[row.region] = row.gprod
+    end
+    for ((year, r), v) in ftotco2_ts
+        slot = get!(bau, (:ftotco20, year), Dict{Symbol,Float64}())
+        slot[r] = v
     end
     mkpath(dirname(_bau_path()))
     JLD2.save(_bau_path(), "bau", bau)
@@ -172,6 +198,64 @@ function _load_bau()
     path = _bau_path()
     isfile(path) || error("missing ", path, "; run active/refcalib.jl (simu = 0) first")
     return JLD2.load(path, "bau")
+end
+
+function _refcalib_book()
+    return normpath(joinpath(@__DIR__, "..", "results", "refcalib.xlsx"))
+end
+
+"""
+    _ftotco20_from_refcalib()
+
+Read reference `FTOTCO2` by region and year from `results/refcalib.xlsx`.
+Uses the `FTOTCO2` sheet when it is present, otherwise the sum of `SCO2`.
+"""
+function _ftotco20_from_refcalib()
+    path = _refcalib_book()
+    isfile(path) || return Dict{Int,Dict{Symbol,Float64}}()
+    xf = XLSX.readxlsx(path)
+    names = XLSX.sheetnames(xf)
+    out = Dict{Int,Dict{Symbol,Float64}}()
+    if "FTOTCO2" in names
+        data = xf["FTOTCO2"][:]
+        for i in 2:size(data, 1)
+            year, region, val = data[i, 1], data[i, 2], data[i, 3]
+            (year === nothing || region === nothing || val === nothing) && continue
+            slot = get!(out, Int(year), Dict{Symbol,Float64}())
+            slot[Symbol(region)] = Float64(val)
+        end
+        return out
+    end
+    "SCO2" in names || return out
+    data = xf["SCO2"][:]
+    for i in 2:size(data, 1)
+        year, region, val = data[i, 1], data[i, 4], data[i, 5]
+        (year === nothing || region === nothing || val === nothing) && continue
+        y = Int(year)
+        slot = get!(out, y, Dict{Symbol,Float64}())
+        slot[Symbol(region)] = get(slot, Symbol(region), 0.0) + Float64(val)
+    end
+    return out
+end
+
+"""
+    _ensure_ftotco20!(bau)
+
+Make sure `bau` contains `(:ftotco20, year)`. An older `bau.jld2` has only
+`gprod`. In that case the series is taken from `results/refcalib.xlsx` and
+written back into `bau.jld2`.
+"""
+function _ensure_ftotco20!(bau)
+    any(k -> k[1] == :ftotco20, keys(bau)) && return bau
+    series = _ftotco20_from_refcalib()
+    isempty(series) && error("bau.jld2 has no ftotco20, and results/refcalib.xlsx has no FTOTCO2 or SCO2 sheet. Run active/refcalib.jl first.")
+    for (year, col) in series
+        bau[(:ftotco20, year)] = col
+    end
+    JLD2.save(_bau_path(), "bau", bau)
+    println("added ftotco20 to ", _bau_path(), " from ", _refcalib_book())
+    flush(stdout)
+    return bau
 end
 
 function _install_gprod!(st, bau, year)
@@ -262,15 +346,18 @@ function record_aeei!(store, st, year; sectors = SECTORS, regions = REGIONS)
     return store
 end
 
-function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", scenario = "")
+function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", scenario = "", policy = :ref, rer = (r, t) -> 1.0)
     simu = Int(simu)
     simu in (0, 1) || throw(ArgumentError("simu must be 0 or 1, got $simu"))
+    policy == :cpq && simu != 1 && throw(ArgumentError("cpq uses the calibrated productivity, so simu must be 1"))
     bau = simu == 1 ? _load_bau() : nothing
+    policy == :cpq && _ensure_ftotco20!(bau)
     spdir = isempty(scenario) ? "" : _savepoint_dir(scenario)
-    println(simu == 0 ? "\nTFP calibration (simu = 0)" : "\nendogenous GDP, GPROD from bau.jld2 (simu = 1)")
+    println(simu == 0 ? "\nTFP calibration (simu = 0)" : policy == :cpq ? "\ncarbon cap, GPROD from bau.jld2 (cpq)" : "\nendogenous GDP, GPROD from bau.jld2 (simu = 1)")
     isempty(spdir) || println("savepoint ", spdir)
     flush(stdout)
     MGE, st = build_model(data; simu)
+    st = (; st..., policy, rer, bau)
     MGE.silent = false
     JuMP.unset_silent(jump_model(MGE))
     rows = NamedTuple[]
@@ -285,6 +372,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
     end
     years = [y for y in YEARS if y <= stop]
     simu == 1 && _install_gprod!(st, bau, years[1])
+    _set_co2cap!(st, years[1])
     _load_point!(MGE, spdir, years[1])
     if iter0
         println("\n================ ", years[1], " (benchmark) ================")
@@ -300,6 +388,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
             _install_gprod!(st, bau, year)
         end
         _set_aeei!(st, data, year)
+        _set_co2cap!(st, year)
         if iter0 && k == 1
             stt = termination_status(jump_model(MGE))
         elseif k == 1
@@ -358,7 +447,7 @@ function run_scenario(data; simu, iter0 = true, stop = YEARS[end], csv = "", sce
         finished = year == years[end]
     end
     if simu == 0 && finished
-        _save_bau(rows)
+        _save_bau(rows, ftotco2_ts)
     end
     return MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts
 end

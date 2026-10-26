@@ -53,11 +53,21 @@ function _try_load_model_cache(key, simu)
     isfile(keypath) && isfile(path) || return nothing
     rstrip(read(keypath, String)) == key || return nothing
     MGE, st = deserialize(path)
-    PATHSolver.c_api_License_SetString(PATH_LICENSE)
+    _revive_cached_model!(MGE)
     return MGE, st
 end
 
+# A serialized WeakKeyDict is not a valid cache. Julia 1.12 crashes with
+# EXCEPTION_ACCESS_VIOLATION on the next lookup, inside build_constraints!.
+function _revive_cached_model!(MGE)
+    jm = jump_model(MGE)
+    setfield!(jm, :subexpressions, WeakKeyDict{Any,MOI.ScalarNonlinearFunction}())
+    PATHSolver.c_api_License_SetString(PATH_LICENSE)
+    return MGE
+end
+
 function _save_model_cache(key, simu, MGE, st)
+    setfield!(jump_model(MGE), :subexpressions, WeakKeyDict{Any,MOI.ScalarNonlinearFunction}())
     keypath, path = _model_cache_paths(simu)
     mkpath(dirname(path))
     tmp = path * ".tmp"

@@ -11,6 +11,29 @@ function _set_aeei!(st, data, year)
     end
     return nothing
 end
+
+"""
+    _set_co2cap!(st, year)
+
+Set the regional combusted-CO2 upper bound for this period.
+
+`co2cap` has no time index. Under `policy = :cpq` the bound is
+`ftotco20[r, year] * rer(r, year)` from `data/bau.jld2` and `active/cpq.jl`.
+Otherwise the bound is kept far above the benchmark so the carbon tax stays zero.
+"""
+function _set_co2cap!(st, year)
+    for r in st.R
+        cap = if st.policy == :cpq
+            col = get(st.bau, (:ftotco20, year), nothing)
+            col === nothing && error("bau.jld2 has no ftotco20 for $year; run active/refcalib.jl first")
+            col[r] * float(st.rer(r, year))
+        else
+            1.0e6 * st.ftotco20[r]
+        end
+        set_value!(st.co2cap[r], cap)
+    end
+    return nothing
+end
 function _boost(r, ord)
     ord > 5 && return 1.0
     return r == :mex ? 1.05^(5 - ord) : 1.10^(6 - ord)
@@ -69,7 +92,7 @@ function _scale_start!(MGE, st, old)
     for v in all_variables(jm)
         JuMP.is_fixed(v) && continue
         n = JuMP.name(v)
-        (startswith(n, "P") || startswith(n, "RA") || startswith(n, "GPROD") || startswith(n, "RGDP")) && continue
+        (startswith(n, "P") || startswith(n, "RA") || startswith(n, "GPROD") || startswith(n, "RGDP") || startswith(n, "CT") || startswith(n, "CP")) && continue
         s = start_value(v)
         (s === nothing || !isfinite(s) || s == 0) && continue
         reg = _lastsym(n)
@@ -112,8 +135,9 @@ end
 function _advance_and_solve!(MGE, st, data, year, next)
     old = _next_state(MGE, st, data, year, next)
     base = _snap(MGE)
+    prox = st.policy == :cpq ? 0.0 : 1e-4
     _plant!(st, old, 1.0)
-    stt = _solve!(MGE; proximal = 1e-4, restarts = 3, iters = 30_000)
+    stt = _solve!(MGE; proximal = prox, restarts = 3, iters = 30_000)
     res = _residual(MGE)
     gap = _gdp_gap(st)
     if !_usable(stt, res, gap)
@@ -121,7 +145,7 @@ function _advance_and_solve!(MGE, st, data, year, next)
         flush(stdout)
         _restore!(MGE, base)
         _scale_start!(MGE, st, old)
-        stt = _solve!(MGE; proximal = 1e-4, restarts = 2, iters = 20_000)
+        stt = _solve!(MGE; proximal = prox, restarts = 2, iters = 20_000)
         res = _residual(MGE)
         gap = _gdp_gap(st)
         println("  scaled ", stt, " res ", res, " gap ", gap)
@@ -139,7 +163,7 @@ function _advance_and_solve!(MGE, st, data, year, next)
         _restore!(MGE, base)
         _plant!(st, old, w)
         _prices_to_one!(MGE)
-        stt_last = _solve!(MGE; proximal = 1e-4, restarts = 1, iters = 10_000)
+        stt_last = _solve!(MGE; proximal = prox, restarts = 1, iters = 10_000)
         failed = false
         for a in range(w + 0.2, 1.0; step = 0.2)
             res = _residual(MGE)
@@ -152,7 +176,7 @@ function _advance_and_solve!(MGE, st, data, year, next)
             end
             _restore!(MGE, origin)
             _plant!(st, old, a)
-            stt_last = _solve!(MGE; proximal = 1e-4, restarts = 1, iters = 10_000)
+            stt_last = _solve!(MGE; proximal = prox, restarts = 1, iters = 10_000)
             if !_usable(stt_last, _residual(MGE), _gdp_gap(st))
                 println("    fail ", a, " ", stt_last, " res ", _residual(MGE), " gap ", _gdp_gap(st))
                 flush(stdout)

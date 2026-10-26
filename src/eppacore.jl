@@ -4,8 +4,9 @@
 Build the MPSGE model for benchmark `B`.
 
 A previous build is reloaded from `cache/` when the Julia source, benchmark
-files, period list, and `simu` are unchanged. New methods are invisible to the
-call frame that loaded this file, so a cache miss rebuilds with `Base.invokelatest`.
+files, period list, and `simu` are unchanged. The loaded JuMP subexpression
+cache is discarded: a serialized `WeakKeyDict` crashes Julia 1.12 while the
+benchmark constraints are created. A cache miss rebuilds with `Base.invokelatest`.
 """
 function build_model(B; simu::Integer = 0)
     apply_smooth!()
@@ -79,6 +80,24 @@ function _build_model(B, simu::Integer = 0)
     g = B.g
     (; y_na, y_ei, y_ag, y_en, y_d, y_el, y_f, y_nhr, y_n, y_tech, y_de, y_arm, y_m, y_hm, y_hx) = active_blocks(B)
     ac_group(g) = g in I || g in TECH ? :industry : g == :households ? :households : :htrn
+    ftotco20 = Dict(r => sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) for r in R)
+
+    # cperv: the benchmark carbon intensity of fuel e in region r, in MtCO2 per 10 billion USD of that fuel
+    cperv = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    for r in R, e in SCO2_ENERGY
+        emis = sum(B.sco20[(e, u, r)] for u in SCO2_SECTORS)
+        val = sum(B.pac0[(e, g, r)] for g in AC_SECTORS)
+        rate = val == 0 ? 0.0 : emis / val
+        for g in AC_SECTORS
+            cperv[(e, g, r)] = rate
+        end
+    end
+
+    # csale: the highest benchmark carbon intensity in r, MtCO2 per 10 billion USD. It is a scaling constant.
+    cscale = Dict(r => begin
+        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in AC_SECTORS)
+        m > 0 ? m : 1.0
+    end for r in R)
 
     @parameters(MGE, begin
         k0[r=R], B.kapital[r],                                  (description = "Endowment: capital")
@@ -90,6 +109,7 @@ function _build_model(B, simu::Integer = 0)
         gdp0[r=R], B.rgdp0[r],                                  (description = "Base-year GDP")
         gp0[r=R], 1.0,                                          (description = "Calibrated productivity target")
         aeei[i=I, r=R], B.aeei[(i, r)],                         (description = "Autonomous energy efficiency factor")
+        co2cap[r=R], ftotco20[r],                               (description = "Upper bound on regional combusted CO2, updated each period")
     end)
 
     @commodities(MGE, begin
@@ -136,30 +156,36 @@ function _build_model(B, simu::Integer = 0)
         HOMX[r=y_hx],                                           (description = "Activity level for net export of homogeneous good")
     end)
 
-    for r in R, g in AC_SECTORS
-        @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
-            @output(PAC[:oil, r],      B.pac0[(:oil, g, r)],    t)
-            @input(PHOM[r],            B.pac0[(:oil, g, r)],    s)
-        end)
-        for e in (:coal, :gas, :roil, :elec)
-            @production(MGE, AC[e, g, r], [t=0, s=0], begin
-                @output(PAC[e, r],     B.pac0[(e, g, r)],       t)
-                @input(PA[e, r],       B.pac0[(e, g, r)],       s)
-            end)
-        end
-    end
-
     @auxiliaries(MGE, begin
         GPROD[r=R],                                             (lower_bound = 0, start = 1, description = "Productivity index")
         RGDP[r=R],                                              (lower_bound = 0, start = B.rgdp0[r], description = "Real GDP")
         EESEC[e=ENERGY, g=EJUSE_SECTORS, r=R],                  (lower_bound = 0, start = B.eesec0[(e, g, r)], description = "Combusted energy use by energy, sector, and region in EJ")
         SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=R],               (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
-        FTOTCO2[r=R],                                           (lower_bound = 0, start = sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY, u in SCO2_SECTORS), description = "Total combusted CO2 by region in MtCO2")
+        FTOTCO2[r=R],                                           (lower_bound = 0, start = ftotco20[r], description = "Total combusted CO2 by region in MtCO2")
+        CP[r=R],                                                (lower_bound = 0, start = 0, description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r")
+        CT[e=SCO2_ENERGY, g=AC_SECTORS, r=R],                   (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user group and region")
     end)
 
     @consumers(MGE, begin
         RA[r=R],                                                (description = "Representative agent")
     end)
+
+    for r in R, g in AC_SECTORS
+        @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
+            @output(PAC[:oil, r],      B.pac0[(:oil, g, r)],    t)
+            @input(PHOM[r],            B.pac0[(:oil, g, r)],    s)
+        end)
+        @production(MGE, AC[:elec, g, r], [t=0, s=0], begin
+            @output(PAC[:elec, r],     B.pac0[(:elec, g, r)],   t)
+            @input(PA[:elec, r],       B.pac0[(:elec, g, r)],   s)
+        end)
+        for e in SCO2_ENERGY
+            @production(MGE, AC[e, g, r], [t=0, s=0], begin
+                @output(PAC[e, r],     B.pac0[(e, g, r)],       t)
+                @input(PA[e, r],       B.pac0[(e, g, r)],       s, taxes=[Tax(RA[r], CT[e, g, r])])
+            end)
+        end
+    end
 
     for (i, r) in y_na
         q = na_block(B, i, r)
@@ -435,8 +461,18 @@ function _build_model(B, simu::Integer = 0)
     end
 
     for r in R
+        # Calculate FTOTCO2[r]
         @aux_constraint(MGE, FTOTCO2[r],
             FTOTCO2[r] - sum(SCO2[e, g, r] for e in SCO2_ENERGY for g in SCO2_SECTORS))
+
+        @aux_constraint(MGE, CP[r], 
+            (co2cap[r] - FTOTCO2[r]) / max(ftotco20[r], 1.0))
+
+        for e in SCO2_ENERGY, g in AC_SECTORS
+            # the ratio cperv / cscale has no unit; CP is the tax rate on the most carbon-intensive fuel
+            @aux_constraint(MGE, CT[e, g, r], 
+                CT[e, g, r] - CP[r] * (cperv[(e, g, r)] / cscale[r]))
+        end
     end
 
     for r in R
@@ -470,6 +506,7 @@ function _build_model(B, simu::Integer = 0)
     end
 
     state = (; MGE, R, k0, l0, sav, grg, gdp0, aeei, GPROD, RGDP, gp0 = gp0_param, simu,
+        CT, co2cap, ftotco20,
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
         labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
         inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())

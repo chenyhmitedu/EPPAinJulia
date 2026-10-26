@@ -40,7 +40,9 @@ stamp("finished zero-iteration benchmark solve in $(round(t_bench; digits = 2)) 
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, casename * ".xlsx")
-MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts = run_scenario(data; simu, scenario = casename)
+policy = isdefined(@__MODULE__, :policy) ? policy : :ref
+rer_fn = isdefined(@__MODULE__, :rer) ? rer : (r, t) -> 1.0
+MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts = run_scenario(data; simu, scenario = casename, policy, rer = rer_fn)
 write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts)
 println("wrote ", path)
 
