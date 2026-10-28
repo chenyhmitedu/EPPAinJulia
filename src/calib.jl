@@ -64,7 +64,6 @@ function prepare(dat_path, elec_path, satellite)
     ej_use_iea = raw.ej_use_iea
     eprod_iea = raw.eprod_iea
     epslon_raw = raw.epslon_raw
-    hist = raw.hist
     ann = raw.ann
     pop = raw.pop
     aeeigr_raw = raw.aeeigr_raw
@@ -472,7 +471,7 @@ function prepare(dat_path, elec_path, satellite)
     end
     _pt("finished benchmark calibration assembly in $(round(t_assemble; digits = 2)) s")
     return (;
-        p, g, ge, REGIONS, SECTORS, hist, ann, pop,
+        p, g, ge, REGIONS, SECTORS, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
         a0, d0, dout_pd, dout_pdb, dout_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,

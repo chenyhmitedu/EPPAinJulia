@@ -258,11 +258,10 @@ function load_benchmark(dat_path, satellite)
     p = load_gams_dat(dat_path, wanted)
     regions = sort!(unique(first.(keys(p["cons0"]))))
     sectors = sort!(unique(last.(keys(p["xp0"]))))
-    book = satellite_lines(satellite, ("eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa"))
-    hist = load_t_table(book["eppatrend_histrgdp"])
+    book = satellite_lines(satellite, ("eppatrend_argdpgrrate", "eppatrend_popa_eppa"))
     ann = load_t_table(book["eppatrend_argdpgrrate"])
     pop = load_t_table(book["eppatrend_popa_eppa"])
-    return (; p, regions, sectors, hist, ann, pop)
+    return (; p, regions, sectors, ann, pop)
 end
 
 """
@@ -270,20 +269,14 @@ end
 
 Exogenous GDP growth applied when leaving `year`.
 
-The opening step uses the historical index over the actual gap. The second
-period still uses that index. Later periods use the annual growth rate. Both
-of the latter are compounded over a normal step.
+Every step uses the annual rate in `eppatrend_argdpgrrate`. The rate is
+compounded over the length of that step, including the shorter opening step.
 """
 function growth_factor(data, r, year)
     i = findfirst(==(year), YEARS)
     i === nothing && error("year $year is not an EPPA period")
-    if i == 1
-        return data.hist[(tcode(year), r)]^step_years(1)
-    elseif i == 2
-        return data.hist[(tcode(year), r)]^regular_step()
-    else
-        return (1 + data.ann[(tcode(year), r)])^regular_step()
-    end
+    n = i < length(YEARS) ? step_years(i) : regular_step()
+    return (1 + data.ann[(tcode(year), r)])^n
 end
 
 function pop_ratio(data, r, year, next)
@@ -403,7 +396,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
         "readgtap_ej_use_iea", "readgtap_eprod_iea", "other_epslon",
-        "eppatrend_histrgdp", "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
+        "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
     ))
     _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
 
@@ -439,7 +432,6 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
         eprod_iea = load_gms_table(book["readgtap_eprod_iea"])
         epslon_raw = load_gms_table(book["other_epslon"])
-        hist = load_t_table(book["eppatrend_histrgdp"])
         ann = load_t_table(book["eppatrend_argdpgrrate"])
         pop = load_t_table(book["eppatrend_popa_eppa"])
         aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
@@ -448,7 +440,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
 
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, epslon_raw, hist, ann, pop, aeeigr_raw)
+    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, epslon_raw, ann, pop, aeeigr_raw)
 end
 
 
