@@ -15,6 +15,31 @@ function load_years(path)
     return years
 end
 
+"""
+    load_period_set(lines)
+
+Read the solve periods from a GAMS set, such as the `other_period` sheet.
+"""
+function load_period_set(lines)
+    years = Int[]
+    inside = false
+    for ln in lines
+        s = strip(ln)
+        (isempty(s) || startswith(s, "*") || startswith(s, "#")) && continue
+        if !inside
+            s == "/" && (inside = true)
+            continue
+        end
+        startswith(s, "/") && break
+        token = replace(split(s)[1], "," => "")
+        y = tryparse(Int, token)
+        y === nothing && error("period set entry is not a year: $s")
+        push!(years, y)
+    end
+    isempty(years) && error("no years in the other_period set")
+    return years
+end
+
 function model_years(path = normpath(joinpath(@__DIR__, "..", "data", "years.txt")))
     return isfile(path) ? load_years(path) : Int[]
 end
@@ -395,7 +420,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
-        "readgtap_ej_use_iea", "readgtap_eprod_iea", "other_epslon",
+        "readgtap_ej_use_iea", "readgtap_eprod_iea", "other_epslon", "other_period",
         "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
     ))
     _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
@@ -435,12 +460,13 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         ann = load_t_table(book["eppatrend_argdpgrrate"])
         pop = load_t_table(book["eppatrend_popa_eppa"])
         aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
+        years = load_period_set(book["other_period"])
     end
     _pt("finished parsing satellite tables in $(round(t_tables; digits = 2)) s")
 
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, epslon_raw, ann, pop, aeeigr_raw)
+    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, eprod_iea, epslon_raw, ann, pop, aeeigr_raw, years)
 end
 
 

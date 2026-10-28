@@ -39,11 +39,14 @@ The land tax is capitalized into the fixed-factor quantity, as in `eppaparm`.
 Household transport is extracted from final demand, as in `eppacalib`. Crude oil
 is treated as one homogeneous good; gas is not. The electricity resource split
 follows `elecpower.gms` and rewrites local copies of `elecin`. A production
-identity is checked for the non-electricity GTAP sectors.
+identity is checked for the non-electricity GTAP sectors. Solve periods are
+the GAMS set on the `other_period` sheet.
 """
 function prepare(dat_path, elec_path, satellite)
     _pt(msg) = (println("prepare: ", msg); flush(stdout))
     raw = load_prepare_inputs(dat_path, elec_path, satellite)
+    set_model_years!(raw.years)
+    println("periods ", join(YEARS, " "))
     p = raw.p
     xa0 = p["xa0"]
     e = raw.e
