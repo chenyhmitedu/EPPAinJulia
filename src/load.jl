@@ -75,12 +75,6 @@ function regular_step()
     return length(YEARS) >= 3 ? step_years(2) : step_years(1)
 end
 
-function tcode(year)
-    i = findfirst(==(year), YEARS)
-    i === nothing && error("year $year is not an EPPA period")
-    return Symbol("t" * lpad(i, 3, '0'))
-end
-
 function load_gams_dat(path, wanted::Set{String})
     out = Dict{String,Dict{Tuple,Float64}}()
     for w in wanted
@@ -119,7 +113,7 @@ end
 """
     load_t_table(lines)
 
-Parse an xls2gms `table` whose rows are `%tNNN%` and whose header is region names.
+Parse an xls2gms `table` whose rows are calendar years and whose header is region names.
 `lines` are the text rows of one satellite sheet.
 """
 function load_t_table(lines)
@@ -139,16 +133,17 @@ function load_t_table(lines)
     end
     isempty(body) && error("no table body in satellite sheet")
     regions = Symbol.(lowercase.(split(strip(body[1]))))
-    data = Dict{Tuple{Symbol,Symbol},Float64}()
+    data = Dict{Tuple{Int,Symbol},Float64}()
     for ln in body[2:end]
         parts = split(strip(ln))
         length(parts) < 2 && continue
-        row = Symbol(lowercase(replace(parts[1], "%" => "")))
+        year = tryparse(Int, parts[1])
+        year === nothing && error("table row is not a year: $(parts[1])")
         vals = tryparse.(Float64, parts[2:end])
         n = min(length(vals), length(regions))
         for j in 1:n
             vals[j] === nothing && continue
-            data[(row, regions[j])] = vals[j]
+            data[(year, regions[j])] = vals[j]
         end
     end
     return data
@@ -301,12 +296,12 @@ function growth_factor(data, r, year)
     i = findfirst(==(year), YEARS)
     i === nothing && error("year $year is not an EPPA period")
     n = i < length(YEARS) ? step_years(i) : regular_step()
-    return (1 + data.ann[(tcode(year), r)])^n
+    return (1 + data.ann[(year, r)])^n
 end
 
 function pop_ratio(data, r, year, next)
-    a = data.pop[(tcode(year), r)]
-    b = data.pop[(tcode(next), r)]
+    a = data.pop[(year, r)]
+    b = data.pop[(next, r)]
     return a == 0 ? 1.0 : b / a
 end
 
