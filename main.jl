@@ -22,8 +22,8 @@ end
 here = joinpath(@__DIR__, "data")
 stamp("starting data preparation")
 t_prepare = @elapsed data = prepare(
-    joinpath(here, "eppa8data_2017.dat"),
-    joinpath(here, "eppa8data_elec_2017.dat"),
+    joinpath(here, "eppa9data_2023.dat"),
+    joinpath(here, "eppa9data_elec_2023.dat"),
     joinpath(here, "satellite.xlsx"),
 )
 stamp("finished data preparation in $(round(t_prepare; digits = 2)) s")
