@@ -252,18 +252,128 @@ function satellite_cache_write(cache_path, path, names, book)
     end
     return nothing
 end
+function _xmltext(s)
+    lt = "&" * "lt;"
+    gt = "&" * "gt;"
+    quot = "&" * "quot;"
+    apos = "&" * "apos;"
+    amp = "&" * "amp;"
+    s = replace(s, lt => "<", gt => ">", quot => "\"", apos => "'")
+    return replace(s, amp => "&")
+end
+
+function _colnum(letters)
+    n = 0
+    for c in letters
+        n = 26n + (Int(c) - Int('A') + 1)
+    end
+    return n
+end
+
+function _shared_strings(xml)
+    sst = String[]
+    for m in eachmatch(r"<si\b[^>]*>(.*?)</si>"s, xml)
+        parts = String[]
+        for t in eachmatch(r"<t\b[^>]*>(.*?)</t>"s, m.captures[1])
+            push!(parts, _xmltext(t.captures[1]))
+        end
+        push!(sst, join(parts))
+    end
+    return sst
+end
+
+function _sheet_lines(xml, sst)
+    lines = String[]
+    lastrow = 0
+    for m in eachmatch(Regex("<row\\b[^>]*\\br=\"(\\d+)\"[^>]*>(.*?)</row>", "s"), xml)
+        row = parse(Int, m.captures[1])
+        cells = Dict{Int,String}()
+        width = 0
+        for c in eachmatch(Regex("<c\\b([^>/]*)(?:/>|>(.*?)</c>)", "s"), m.captures[2])
+            attrs = c.captures[1]
+            body = c.captures[2] === nothing ? "" : c.captures[2]
+            ref = match(Regex("\\br=\"([A-Z]+)"), attrs)
+            ref === nothing && continue
+            col = _colnum(ref.captures[1])
+            kind = match(Regex("\\bt=\"([A-Za-z]+)\""), attrs)
+            t = kind === nothing ? "" : kind.captures[1]
+            vm = match(r"<v[^>]*>(.*?)</v>"s, body)
+            val = if t == "s" && vm !== nothing
+                sst[parse(Int, vm.captures[1]) + 1]
+            elseif t == "inlineStr" || t == "str"
+                tm = match(r"<t\b[^>]*>(.*?)</t>"s, body)
+                if tm !== nothing
+                    _xmltext(tm.captures[1])
+                elseif vm !== nothing
+                    _xmltext(vm.captures[1])
+                else
+                    ""
+                end
+            elseif vm !== nothing
+                vm.captures[1]
+            else
+                ""
+            end
+            cells[col] = strip(val)
+            width = max(width, col)
+        end
+        for _ in (lastrow + 1):(row - 1)
+            push!(lines, "")
+        end
+        lastrow = row
+        if width == 0
+            push!(lines, "")
+            continue
+        end
+        parts = String[get(cells, j, "") for j in 1:width]
+        while !isempty(parts) && isempty(parts[end])
+            pop!(parts)
+        end
+        push!(lines, isempty(parts) ? "" : join(parts, '\t'))
+    end
+    return lines
+end
+
+function _sheet_targets(reader)
+    wb = XLSX.ZipArchives.zip_readentry(reader, "xl/workbook.xml", String)
+    rels = XLSX.ZipArchives.zip_readentry(reader, "xl/_rels/workbook.xml.rels", String)
+    target = Dict{String,String}()
+    for m in eachmatch(Regex("Id=\"([^\"]+)\"[^>]*Target=\"([^\"]+)\""), rels)
+        path = m.captures[2]
+        target[m.captures[1]] = startswith(path, "xl/") ? path : "xl/" * lstrip(path, '/')
+    end
+    names = Dict{String,String}()
+    for m in eachmatch(Regex("<sheet\\b[^>]*name=\"([^\"]+)\"[^>]*r:id=\"([^\"]+)\""), wb)
+        haskey(target, m.captures[2]) || continue
+        names[m.captures[1]] = target[m.captures[2]]
+    end
+    return names
+end
+
 """
     satellite_lines(path, names)
 
-Text rows of the named sheets in `satellite.xlsx`. A cache is used when the
-workbook path, size, modification time, and requested sheet names still match.
+Text rows of the named sheets in `satellite.xlsx`. Only those sheets are
+unzipped. A cache is used when the workbook path, size, modification time,
+and requested sheet names still match.
 """
 function satellite_lines(path, names)
     cache_path = satellite_cache_path(path)
     cached = satellite_cache_read(cache_path, path, names)
     cached !== nothing && return cached
-    xf = XLSX.readxlsx(path)
-    book = Dict(String(name) => gms_lines(xf[String(name)]) for name in names)
+    reader = XLSX.ZipArchives.ZipReader(read(path))
+    targets = _sheet_targets(reader)
+    sst = String[]
+    if XLSX.ZipArchives.zip_findlast_entry(reader, "xl/sharedStrings.xml") !== nothing
+        sst = _shared_strings(XLSX.ZipArchives.zip_readentry(reader, "xl/sharedStrings.xml", String))
+    end
+    book = Dict{String,Vector{String}}()
+    for name in names
+        key = String(name)
+        haskey(targets, key) || error("satellite workbook has no sheet $key")
+        xml = XLSX.ZipArchives.zip_readentry(reader, targets[key], String)
+        book[key] = _sheet_lines(xml, sst)
+    end
     satellite_cache_write(cache_path, path, names, book)
     return book
 end
