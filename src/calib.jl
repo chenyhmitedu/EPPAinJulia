@@ -1,4 +1,4 @@
-﻿const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
+const REGIONS = [:usa, :can, :mex, :jpn, :anz, :eur, :roe, :rus, :asi, :chn, :ind, :bra, :afr, :mes, :lam, :rea, :kor, :idz]
 const SECTORS = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
 const NE = [:crop, :live, :fors, :food, :eint, :othr, :serv, :tran, :dwe]
 const NENDT = [:crop, :live, :fors, :food, :eint, :othr, :serv]
@@ -64,6 +64,7 @@ function prepare(dat_path, elec_path, satellite)
     os = raw.os
     esh = raw.esh
     mvh = raw.mvh
+    ej_use_iea = raw.ej_use_iea
     epslon_raw = raw.epslon_raw
     ann = raw.ann
     pop = raw.pop
@@ -285,7 +286,9 @@ function prepare(dat_path, elec_path, satellite)
     techxp0 = Dict{Tuple{Symbol,Symbol},Float64}()
     sav0 = Dict{Symbol,Float64}()
     ejuse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    ejuse_all0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     ejuse_all = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    ejuse = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     euse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     ejuse_over_euse = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     kapital = Dict(r => sum(g("kapd0", (r, i)) for i in SECTORS) for r in REGIONS)
@@ -339,6 +342,7 @@ function prepare(dat_path, elec_path, satellite)
     coalden = Dict{Symbol,Float64}()
     gasden = Dict{Symbol,Float64}()
     roilden = Dict{Symbol,Float64}()
+    ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
     sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
         coalden[r] = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
@@ -349,7 +353,7 @@ function prepare(dat_path, elec_path, satellite)
     for r in REGIONS, g in SECTORS, e in ENERGY
         g == :elec && continue      # && evaluates the right-hand side only if the left-hand side is true
         ejuse0[(e, g, r)] = gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
-        ejuse_all[(e, g, r)] = gv("eind", (e, g, r))
+        ejuse_all0[(e, g, r)] = gv("eind", (e, g, r))
         euse0[(e, g, r)] = xa0[(r, e, g)]
         ejuse_over_euse[(e, g, r)] = euse0[(e, g, r)] == 0 ? 0.0 : ejuse0[(e, g, r)] / euse0[(e, g, r)]
     end
@@ -357,8 +361,8 @@ function prepare(dat_path, elec_path, satellite)
     for r in REGIONS, e in ENERGY
         ejuse0[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) * cr(:roil, :final, r) : gv("efd", (e, r))
         ejuse0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) * cr(:roil, :final, r) : 0.0
-        ejuse_all[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) : gv("efd", (e, r))
-        ejuse_all[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) : 0.0
+        ejuse_all0[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) : gv("efd", (e, r))
+        ejuse_all0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) : 0.0
         euse0[(e, :households, r)] = ence1[(e, r)]
         euse0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
         ejuse_over_euse[(e, :households, r)] = euse0[(e, :households, r)] == 0 ? 0.0 : ejuse0[(e, :households, r)] / euse0[(e, :households, r)]
@@ -375,9 +379,29 @@ function prepare(dat_path, elec_path, satellite)
             q = elecin[(i_, e, r)]
             euse0[(e, i_, r)] = e == :roil ? q * cr(:roil, :elec, r) : q
             ejuse0[(e, i_, r)] = share * q
-            ejuse_all[(e, i_, r)] = share_all * q
+            ejuse_all0[(e, i_, r)] = share_all * q
             ejuse_over_euse[(e, i_, r)] = euse0[(e, i_, r)] == 0 ? 0.0 : ejuse0[(e, i_, r)] / euse0[(e, i_, r)]
         end
+    end
+
+    ej_use_iea_level(e, r) = begin
+        haskey(ej_use_iea, (e, r)) && return ej_use_iea[(e, r)]
+        e == :roil && return get(ej_use_iea, (:oil, r), 0.0)
+        return 0.0
+    end
+    for r in REGIONS, e in (:coal, :roil, :gas)
+        total = sum(ejuse_all0[(e, g, r)] for g in EJUSE_SECTORS)
+        ejadj[(e, r)] = total == 0 ? 0.0 : ej_use_iea_level(e, r) / total
+    end
+
+    ejadj_level(e, r) = get(ejadj, (e, r), 1.0)
+    for (key, value) in ejuse0
+        e, _, r = key
+        ejuse[key] = value * ejadj_level(e, r)
+    end
+    for (key, value) in ejuse_all0
+        e, _, r = key
+        ejuse_all[key] = value * ejadj_level(e, r)
     end
 
     for r in REGIONS, e in ENERGY
@@ -456,17 +480,17 @@ function prepare(dat_path, elec_path, satellite)
     for r in REGIONS, g in SECTORS
         g == :elec && continue
         for e in SCO2_ENERGY
-            sco20[(e, g, r)] = sco2coef[e] * ejuse0[(e, g, r)]
+            sco20[(e, g, r)] = sco2coef[e] * ejuse[(e, g, r)]
         end
     end
 
     for r in REGIONS, i_ in TECH, e in SCO2_ENERGY
-        sco20[(e, i_, r)] = sco2coef[e] * ejuse0[(e, i_, r)]
+        sco20[(e, i_, r)] = sco2coef[e] * ejuse[(e, i_, r)]
     end
 
     for r in REGIONS, e in SCO2_ENERGY
-        sco20[(e, :households, r)] = sco2coef[e] * ejuse0[(e, :households, r)]
-        sco20[(e, :htrn, r)] = sco2coef[e] * ejuse0[(e, :htrn, r)]
+        sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
+        sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
     end
 
     end
@@ -478,7 +502,7 @@ function prepare(dat_path, elec_path, satellite)
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, coalden, gasden, roilden, ejuse0, ejuse_all, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, coalden, gasden, roilden, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
     )
 end
 

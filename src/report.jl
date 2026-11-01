@@ -1,12 +1,12 @@
 """
-    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing)
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing, ejadj_ts = nothing)
 
 Write the scenario workbook. Sheets are `EE`, `SCO2`, `FTOTCO2`, `AEEI`, `co2p`, and `solve_status`.
-When provided, benchmark sheets `ejuse0`, `ejuse_all`, `enden`, and `cr` are also written.
+When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `enden`, `cr`, and `ejadj` are also written.
 `enden` holds base-year `coalden`, `gasden`, and `roilden` by region.
 `co2p[r]` is `CP[r] / cscale[r] * 10^4`, in USD per tonne at base-year fuel prices. It is the same for every fuel and user.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing, ejadj_ts = nothing)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EE")
         ej[1, 1] = "year"
@@ -94,19 +94,51 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
             end
         end
 
-        if ejuse_all_ts !== nothing
-            allsheet = XLSX.addsheet!(xf, "ejuse_all")
+        if ejuse_all0_ts !== nothing
+            allsheet = XLSX.addsheet!(xf, "ejuse_all0")
             allsheet[1, 1] = "energy"
             allsheet[1, 2] = "user"
             allsheet[1, 3] = "region"
-            allsheet[1, 4] = "ejuse_all"
-            for (i, (key, value)) in enumerate(sort!(collect(ejuse_all_ts); by = x -> x.first))
+            allsheet[1, 4] = "ejuse_all0"
+            for (i, (key, value)) in enumerate(sort!(collect(ejuse_all0_ts); by = x -> x.first))
                 energy, user, region = key
                 row = i + 1
                 allsheet[row, 1] = String(energy)
                 allsheet[row, 2] = String(user)
                 allsheet[row, 3] = String(region)
                 allsheet[row, 4] = value
+            end
+        end
+
+        if ejuse_all_ts !== nothing
+            allsheet2 = XLSX.addsheet!(xf, "ejuse_all")
+            allsheet2[1, 1] = "energy"
+            allsheet2[1, 2] = "user"
+            allsheet2[1, 3] = "region"
+            allsheet2[1, 4] = "ejuse_all"
+            for (i, (key, value)) in enumerate(sort!(collect(ejuse_all_ts); by = x -> x.first))
+                energy, user, region = key
+                row = i + 1
+                allsheet2[row, 1] = String(energy)
+                allsheet2[row, 2] = String(user)
+                allsheet2[row, 3] = String(region)
+                allsheet2[row, 4] = value
+            end
+        end
+
+        if ejuse_ts !== nothing
+            usheet = XLSX.addsheet!(xf, "ejuse")
+            usheet[1, 1] = "energy"
+            usheet[1, 2] = "user"
+            usheet[1, 3] = "region"
+            usheet[1, 4] = "ejuse"
+            for (i, (key, value)) in enumerate(sort!(collect(ejuse_ts); by = x -> x.first))
+                energy, user, region = key
+                row = i + 1
+                usheet[row, 1] = String(energy)
+                usheet[row, 2] = String(user)
+                usheet[row, 3] = String(region)
+                usheet[row, 4] = value
             end
         end
 
@@ -137,6 +169,20 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
                 crsheet[row, 1] = String(context)
                 crsheet[row, 2] = String(region)
                 crsheet[row, 3] = value
+            end
+        end
+
+        if ejadj_ts !== nothing
+            jsheet = XLSX.addsheet!(xf, "ejadj")
+            jsheet[1, 1] = "energy"
+            jsheet[1, 2] = "region"
+            jsheet[1, 3] = "ejadj"
+            for (i, (key, value)) in enumerate(sort!(collect(ejadj_ts); by = x -> x.first))
+                energy, region = key
+                row = i + 1
+                jsheet[row, 1] = String(energy)
+                jsheet[row, 2] = String(region)
+                jsheet[row, 3] = value
             end
         end
 

@@ -1,4 +1,4 @@
-﻿"""
+"""
     load_years(path)
 
 Read the solve periods from a text file. Blank lines and lines that start with `*` or `#` are ignored.
@@ -525,7 +525,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
         "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
         "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
-        "other_epslon", "other_period",
+        "readgtap_ej_use_iea", "other_epslon", "other_period",
         "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
     ))
     _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
@@ -559,6 +559,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         os = load_assigns(book["eppa_htrn_os"])
         esh = load_assigns(book["eppa_htrn_es"])
         mvh = load_assigns(book["eppa_htrn_mvh"])
+        ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
         epslon_raw = load_gms_table(book["other_epslon"])
         ann = load_t_table(book["eppatrend_argdpgrrate"])
         pop = load_t_table(book["eppatrend_popa_eppa"])
@@ -569,7 +570,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
 
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, epslon_raw, ann, pop, aeeigr_raw, years)
+    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, epslon_raw, ann, pop, aeeigr_raw, years)
 end
 
 
