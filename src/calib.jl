@@ -64,8 +64,6 @@ function prepare(dat_path, elec_path, satellite)
     os = raw.os
     esh = raw.esh
     mvh = raw.mvh
-    ej_use_iea = raw.ej_use_iea
-    eprod_iea = raw.eprod_iea
     epslon_raw = raw.epslon_raw
     ann = raw.ann
     pop = raw.pop
@@ -183,7 +181,7 @@ function prepare(dat_path, elec_path, satellite)
     tottrn = Dict{Symbol,Float64}()
     xh = Dict{Tuple{Symbol,Symbol},Float64}()
     ence = Dict{Tuple{Symbol,Symbol},Float64}()
-    encep = Dict{Tuple{Symbol,Symbol},Float64}()
+    ence1 = Dict{Tuple{Symbol,Symbol},Float64}()
     pac0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
         purtrn[r] = g("xdc0", (r, :tran)) + g("xmc0", (r, :tran))
@@ -216,7 +214,7 @@ function prepare(dat_path, elec_path, satellite)
         end
         ence[(:roil, r)] -= tfo[r]
         for i in ENERGY
-            encep[(i, r)] = max(ence[(i, r)], 0.0)
+            ence1[(i, r)] = max(ence[(i, r)], 0.0)
         end
     end
 
@@ -286,9 +284,10 @@ function prepare(dat_path, elec_path, satellite)
     efout0 = Dict{Symbol,Float64}()
     techxp0 = Dict{Tuple{Symbol,Symbol},Float64}()
     sav0 = Dict{Symbol,Float64}()
-    eesec0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
-    eusecoef0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
-    eeseccoef = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    ejuse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    ejuse_all = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    euse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    ejuse_over_euse = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     kapital = Dict(r => sum(g("kapd0", (r, i)) for i in SECTORS) for r in REGIONS)
     labor = Dict(r => sum(g("labd0", (r, i)) for i in SECTORS) + g("labdg0", (r,)) for r in REGIONS)
     rshr = Dict(:nele => 0.15, :hele => 0.30, :rele => 0.15)
@@ -337,49 +336,48 @@ function prepare(dat_path, elec_path, satellite)
     end
 
     gv = g
-    ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
+    coalden = Dict{Symbol,Float64}()
+    gasden = Dict{Symbol,Float64}()
+    roilden = Dict{Symbol,Float64}()
     sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
-        coalden = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
-        gasden = sum(gv("eind", (:gas, g, r)) for g in SECTORS) + gv("efd", (:gas, r))
-        oilden = sum(gv("eind", (:oil, g, r)) for g in SECTORS) + gv("efd", (:oil, r))
-        elecden = sum(gv("eind", (:elec, g, r)) for g in SECTORS) + gv("efd", (:elec, r))
-        elecnum = sum(get(eprod_iea, (t, r), 0.0) for t in TECH)
-        ejadj[(:coal, r)] = coalden == 0 ? 1.0 : get(ej_use_iea, (:coal, r), 0.0) / coalden
-        ejadj[(:gas, r)] = gasden == 0 ? 1.0 : get(ej_use_iea, (:gas, r), 0.0) / gasden
-        oiladj = oilden == 0 ? 1.0 : get(ej_use_iea, (:oil, r), 0.0) / oilden
-        ejadj[(:oil, r)] = oiladj
-        ejadj[(:roil, r)] = oiladj
-        ejadj[(:elec, r)] = elecden == 0 ? 1.0 : elecnum / elecden
+        coalden[r] = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
+        gasden[r] = sum(gv("eind", (:gas, g, r)) for g in SECTORS) + gv("efd", (:gas, r))
+        roilden[r] = sum(gv("eind", (:roil, g, r)) for g in SECTORS) + gv("efd", (:roil, r))
     end
 
     for r in REGIONS, g in SECTORS, e in ENERGY
-        eesec0[(e, g, r)] = ejadj[(e, r)] * gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
-        if g == :elec
-            eusecoef0[(e, g, r)] = sum(elecin[(t, e, r)] for t in TECH)
-        else
-            eusecoef0[(e, g, r)] = xa0[(r, e, g)]
-        end
-        denom = eusecoef0[(e, g, r)]
-        eeseccoef[(e, g, r)] = denom == 0 ? 0.0 : eesec0[(e, g, r)] / denom
+        g == :elec && continue      # && evaluates the right-hand side only if the left-hand side is true
+        ejuse0[(e, g, r)] = gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
+        ejuse_all[(e, g, r)] = gv("eind", (e, g, r))
+        euse0[(e, g, r)] = xa0[(r, e, g)]
+        ejuse_over_euse[(e, g, r)] = euse0[(e, g, r)] == 0 ? 0.0 : ejuse0[(e, g, r)] / euse0[(e, g, r)]
     end
 
     for r in REGIONS, e in ENERGY
-        eesec0[(e, :households, r)] = ejadj[(e, r)] * (e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) * cr(:roil, :final, r) : gv("efd", (e, r)))
-        eesec0[(e, :htrn, r)] = ejadj[(e, r)] * (e == :roil ? os[r] * gv("efd", (:roil, r)) * cr(:roil, :final, r) : 0.0)
-        eusecoef0[(e, :households, r)] = encep[(e, r)]
-        eusecoef0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
-        denom = eusecoef0[(e, :households, r)]
-        eeseccoef[(e, :households, r)] = denom == 0 ? 0.0 : eesec0[(e, :households, r)] / denom
-        denom = eusecoef0[(e, :htrn, r)]
-        eeseccoef[(e, :htrn, r)] = denom == 0 ? 0.0 : eesec0[(e, :htrn, r)] / denom
+        ejuse0[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) * cr(:roil, :final, r) : gv("efd", (e, r))
+        ejuse0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) * cr(:roil, :final, r) : 0.0
+        ejuse_all[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) : gv("efd", (e, r))
+        ejuse_all[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) : 0.0
+        euse0[(e, :households, r)] = ence1[(e, r)]
+        euse0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
+        ejuse_over_euse[(e, :households, r)] = euse0[(e, :households, r)] == 0 ? 0.0 : ejuse0[(e, :households, r)] / euse0[(e, :households, r)]
+        ejuse_over_euse[(e, :htrn, r)] = euse0[(e, :htrn, r)] == 0 ? 0.0 : ejuse0[(e, :htrn, r)] / euse0[(e, :htrn, r)]
     end
 
-    for r in REGIONS, i_ in TECH, e in ENERGY
-        eesec0[(e, i_, r)] = e == :roil ? eeseccoef[(e, :elec, r)] * elecin[(i_, :roil, r)] : eeseccoef[(e, :elec, r)] * elecin[(i_, e, r)]
-        eusecoef0[(e, i_, r)] = e == :roil ? elecin[(i_, :roil, r)] * cr(:roil, :elec, r) : elecin[(i_, e, r)]
-        denom = eusecoef0[(e, i_, r)]
-        eeseccoef[(e, i_, r)] = denom == 0 ? 0.0 : eesec0[(e, i_, r)] / denom
+    for r in REGIONS, e in ENERGY
+        elec_use = gv("eind", (e, :elec, r)) * (e == :roil ? cr(:roil, :elec, r) : 1.0)
+        elec_use_all = gv("eind", (e, :elec, r))
+        fuel_in = sum(elecin[(t, e, r)] for t in TECH)
+        share = fuel_in == 0 ? 0.0 : elec_use / fuel_in
+        share_all = fuel_in == 0 ? 0.0 : elec_use_all / fuel_in
+        for i_ in TECH
+            q = elecin[(i_, e, r)]
+            euse0[(e, i_, r)] = e == :roil ? q * cr(:roil, :elec, r) : q
+            ejuse0[(e, i_, r)] = share * q
+            ejuse_all[(e, i_, r)] = share_all * q
+            ejuse_over_euse[(e, i_, r)] = euse0[(e, i_, r)] == 0 ? 0.0 : ejuse0[(e, i_, r)] / euse0[(e, i_, r)]
+        end
     end
 
     for r in REGIONS, e in ENERGY
@@ -390,7 +388,7 @@ function prepare(dat_path, elec_path, satellite)
         end
         industry += e == :roil ? sum(elecin[(t, :roil, r)] * cr(:roil, :elec, r) for t in TECH) : sum(elecin[(t, e, r)] for t in TECH)
         pac0[(e, :industry, r)] = industry
-        pac0[(e, :households, r)] = e == :roil ? encep[(e, r)] * cr(:roil, :final, r) : encep[(e, r)]
+        pac0[(e, :households, r)] = e == :roil ? ence1[(e, r)] * cr(:roil, :final, r) : ence1[(e, r)]
         pac0[(e, :htrn, r)] = e == :roil ? tfo[r] * cr(:roil, :final, r) : 0.0
     end
 
@@ -458,17 +456,17 @@ function prepare(dat_path, elec_path, satellite)
     for r in REGIONS, g in SECTORS
         g == :elec && continue
         for e in SCO2_ENERGY
-            sco20[(e, g, r)] = sco2coef[e] * eesec0[(e, g, r)]
+            sco20[(e, g, r)] = sco2coef[e] * ejuse0[(e, g, r)]
         end
     end
 
     for r in REGIONS, i_ in TECH, e in SCO2_ENERGY
-        sco20[(e, i_, r)] = sco2coef[e] * eesec0[(e, i_, r)]
+        sco20[(e, i_, r)] = sco2coef[e] * ejuse0[(e, i_, r)]
     end
 
     for r in REGIONS, e in SCO2_ENERGY
-        sco20[(e, :households, r)] = sco2coef[e] * eesec0[(e, :households, r)]
-        sco20[(e, :htrn, r)] = sco2coef[e] * eesec0[(e, :htrn, r)]
+        sco20[(e, :households, r)] = sco2coef[e] * ejuse0[(e, :households, r)]
+        sco20[(e, :htrn, r)] = sco2coef[e] * ejuse0[(e, :htrn, r)]
     end
 
     end
@@ -478,9 +476,9 @@ function prepare(dat_path, elec_path, satellite)
         elas, esup, esube, sigu, delas, cr, wst,
         a0, d0, dout_pd, dout_pdb, dout_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
-        purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, encep, pac0,
+        purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, eesec0, eusecoef0, eeseccoef, sco2coef, sco20, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, coalden, gasden, roilden, ejuse0, ejuse_all, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
     )
 end
 
@@ -530,8 +528,3 @@ function replication_error(calib_path, sim_path)
     end
     return dprod, dgdp, dtarget
 end
-
-
-
-
-

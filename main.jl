@@ -42,8 +42,10 @@ mkpath(out)
 path = joinpath(out, casename * ".xlsx")
 policy = isdefined(@__MODULE__, :policy) ? policy : :ref
 rer_fn = isdefined(@__MODULE__, :rer) ? rer : (r, t) -> 1.0
+cr_contexts = [filter(!=(:elec), EPPAinJulia.SECTORS)..., :elec, :final]
+cr_ts = Dict((ctx, r) => data.cr(:roil, ctx, r) for ctx in cr_contexts for r in data.REGIONS)
 MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts = run_scenario(data; simu, scenario = casename, policy, rer = rer_fn)
-write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts)
+write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = data.ejuse0, ejuse_all_ts = data.ejuse_all, coalden = data.coalden, gasden = data.gasden, roilden = data.roilden, cr_ts = cr_ts)
 println("wrote ", path)
 
 if simu == 1 && isfile(joinpath(out, "refcalib.xlsx"))

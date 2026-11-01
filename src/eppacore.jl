@@ -1,4 +1,4 @@
-﻿"""
+"""
     build_model(B; simu::Integer = 0)
 
 Build the MPSGE model for benchmark `B`.
@@ -159,7 +159,7 @@ function _build_model(B, simu::Integer = 0)
     @auxiliaries(MGE, begin
         GPROD[r=R],                                             (lower_bound = 0, start = 1, description = "Productivity index")
         RGDP[r=R],                                              (lower_bound = 0, start = B.rgdp0[r], description = "Real GDP")
-        EESEC[e=ENERGY, g=EJUSE_SECTORS, r=R],                  (lower_bound = 0, start = B.eesec0[(e, g, r)], description = "Combusted energy use by energy, sector, and region in EJ")
+        EE[e=ENERGY, g=EJUSE_SECTORS, r=R],                     (lower_bound = 0, start = B.ejuse0[(e, g, r)], description = "Combusted energy use by energy, sector, and region in EJ")
         SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=R],               (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
         FTOTCO2[r=R],                                           (lower_bound = 0, start = ftotco20[r], description = "Total combusted CO2 by region in MtCO2")
         CP[r=R],                                                (lower_bound = 0, start = 0, description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r")
@@ -393,12 +393,12 @@ function _build_model(B, simu::Integer = 0)
             @input(PTRN[r],            B.tottrn[r],                                     s)
             [@input(PA[i, r],          B.xh[(i, r)],                                    a,              taxes=[Tax(RA[r], g("tp", (i, r)))],                           reference_price=g("pc0", (i, r))) for i in NENDT]...
             [@input(PA[:dwe, r],       B.xh[(:dwe, r)],                                 dw,             taxes=[Tax(RA[r], g("tp", (:dwe, r)))],                        reference_price=g("pc0", (:dwe, r)))]...
-            @input(PAC[:oil, r],       B.encep[(:oil, r)],                              oil,            taxes=[Tax(RA[r], g("tp", (:oil, r)))],                        reference_price=g("pc0", (:oil, r)))
-            @input(PAC[:gas, r],       B.encep[(:gas, r)],                              gas,            taxes=[Tax(RA[r], g("tp", (:gas, r)))],                        reference_price=g("pc0", (:gas, r)))
-            @input(PAC[:coal, r],      B.encep[(:coal, r)],                             coal,           taxes=[Tax(RA[r], g("tp", (:coal, r)))],                       reference_price=g("pc0", (:coal, r)))
-            @input(PAC[:roil, r],      B.encep[(:roil, r)] * B.cr(:roil, :final, r),    roil,           taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
-            @input(PA[:roil, r],       B.encep[(:roil, r)] * (1 - B.cr(:roil, :final, r)), roil,        taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
-            @input(PAC[:elec, r],      B.encep[(:elec, r)],                             elec,           taxes=[Tax(RA[r], g("tp", (:elec, r)))],                       reference_price=g("pc0", (:elec, r)))
+            @input(PAC[:oil, r],       B.ence1[(:oil, r)],                              oil,            taxes=[Tax(RA[r], g("tp", (:oil, r)))],                        reference_price=g("pc0", (:oil, r)))
+            @input(PAC[:gas, r],       B.ence1[(:gas, r)],                              gas,            taxes=[Tax(RA[r], g("tp", (:gas, r)))],                        reference_price=g("pc0", (:gas, r)))
+            @input(PAC[:coal, r],      B.ence1[(:coal, r)],                             coal,           taxes=[Tax(RA[r], g("tp", (:coal, r)))],                       reference_price=g("pc0", (:coal, r)))
+            @input(PAC[:roil, r],      B.ence1[(:roil, r)] * B.cr(:roil, :final, r),    roil,           taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
+            @input(PA[:roil, r],       B.ence1[(:roil, r)] * (1 - B.cr(:roil, :final, r)), roil,        taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
+            @input(PAC[:elec, r],      B.ence1[(:elec, r)],                             elec,           taxes=[Tax(RA[r], g("tp", (:elec, r)))],                       reference_price=g("pc0", (:elec, r)))
         end)
         @production(MGE, W[r], [t=0, s=0], begin
             @output(PW[r],             B.cons0[r] + B.inv0[r] + B.hhwedge[r],           t)
@@ -452,12 +452,12 @@ function _build_model(B, simu::Integer = 0)
     end
 
     for r in R, g in EJUSE_SECTORS, e in ENERGY
-        expr = B.eeseccoef[(e, g, r)] * B.eusecoef0[(e, g, r)] * AC[e, ac_group(g), r]
-        @aux_constraint(MGE, EESEC[e, g, r], EESEC[e, g, r] - expr)
+        expr = B.ejuse_over_euse[(e, g, r)] * B.euse0[(e, g, r)] * AC[e, ac_group(g), r]
+        @aux_constraint(MGE, EE[e, g, r], EE[e, g, r] - expr)
     end
 
     for r in R, g in SCO2_SECTORS, e in SCO2_ENERGY
-        @aux_constraint(MGE, SCO2[e, g, r], SCO2[e, g, r] - B.sco2coef[e] * EESEC[e, g, r])
+        @aux_constraint(MGE, SCO2[e, g, r], SCO2[e, g, r] - B.sco2coef[e] * EE[e, g, r])
     end
 
     for r in R
@@ -516,30 +516,3 @@ function _build_model(B, simu::Integer = 0)
     end
     return MGE, state
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

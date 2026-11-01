@@ -320,7 +320,7 @@ end
 
 function record_eesec!(store, MGE, year; energies = ENERGY, users = EJUSE_SECTORS, regions = REGIONS)
     for r in regions, g in users, e in energies
-        store[(year, e, g, r)] = _level(MGE[:EESEC][e, g, r])
+        store[(year, e, g, r)] = _level(MGE[:EE][e, g, r])
     end
     return store
 end
