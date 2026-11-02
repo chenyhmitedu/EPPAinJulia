@@ -339,16 +339,8 @@ function prepare(dat_path, elec_path, satellite)
     end
 
     gv = g
-    coalden = Dict{Symbol,Float64}()
-    gasden = Dict{Symbol,Float64}()
-    roilden = Dict{Symbol,Float64}()
     ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
     sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
-    for r in REGIONS
-        coalden[r] = sum(gv("eind", (:coal, g, r)) for g in SECTORS) + gv("efd", (:coal, r))
-        gasden[r] = sum(gv("eind", (:gas, g, r)) for g in SECTORS) + gv("efd", (:gas, r))
-        roilden[r] = sum(gv("eind", (:roil, g, r)) for g in SECTORS) + gv("efd", (:roil, r))
-    end
 
     for r in REGIONS, g in SECTORS, e in ENERGY
         g == :elec && continue      # && evaluates the right-hand side only if the left-hand side is true
@@ -502,7 +494,7 @@ function prepare(dat_path, elec_path, satellite)
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, coalden, gasden, roilden, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
     )
 end
 

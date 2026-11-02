@@ -1,12 +1,11 @@
 """
-    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing, ejadj_ts = nothing)
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing)
 
 Write the scenario workbook. Sheets are `EE`, `SCO2`, `FTOTCO2`, `AEEI`, `co2p`, and `solve_status`.
-When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `enden`, `cr`, and `ejadj` are also written.
-`enden` holds base-year `coalden`, `gasden`, and `roilden` by region.
+When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `cr`, and `ejadj` are also written.
 `co2p[r]` is `CP[r] / cscale[r] * 10^4`, in USD per tonne at base-year fuel prices. It is the same for every fuel and user.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, coalden = nothing, gasden = nothing, roilden = nothing, cr_ts = nothing, ejadj_ts = nothing)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EE")
         ej[1, 1] = "year"
@@ -139,22 +138,6 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
                 usheet[row, 2] = String(user)
                 usheet[row, 3] = String(region)
                 usheet[row, 4] = value
-            end
-        end
-
-        if coalden !== nothing && gasden !== nothing && roilden !== nothing
-            dsheet = XLSX.addsheet!(xf, "enden")
-            dsheet[1, 1] = "region"
-            dsheet[1, 2] = "coalden"
-            dsheet[1, 3] = "gasden"
-            dsheet[1, 4] = "roilden"
-            regions = sort!(collect(keys(coalden)))
-            for (i, region) in enumerate(regions)
-                row = i + 1
-                dsheet[row, 1] = String(region)
-                dsheet[row, 2] = coalden[region]
-                dsheet[row, 3] = gasden[region]
-                dsheet[row, 4] = roilden[region]
             end
         end
 
