@@ -1,4 +1,4 @@
-using Pkg
+﻿using Pkg
 Pkg.activate(".")
 Pkg.instantiate()
 
@@ -22,8 +22,8 @@ end
 here = joinpath(@__DIR__, "data")
 stamp("starting data preparation")
 t_prepare = @elapsed data = prepare(
-    joinpath(here, "eppa9data_2023.dat"),
-    joinpath(here, "eppa9data_elec_2023.dat"),
+    joinpath(here, "eppa8data_2017.dat"),
+    joinpath(here, "eppa8data_elec_2017.dat"),
     joinpath(here, "satellite.xlsx"),
 )
 stamp("finished data preparation in $(round(t_prepare; digits = 2)) s")
@@ -45,7 +45,7 @@ rer_fn = isdefined(@__MODULE__, :rer) ? rer : (r, t) -> 1.0
 cr_contexts = [filter(!=(:elec), EPPAinJulia.SECTORS)..., :elec, :final]
 cr_ts = Dict((ctx, r) => data.cr(:roil, ctx, r) for ctx in cr_contexts for r in data.REGIONS)
 MGE, st, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts = run_scenario(data; simu, scenario = casename, policy, rer = rer_fn)
-write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = data.ejuse0, ejuse_all0_ts = data.ejuse_all0, ejuse_all_ts = data.ejuse_all, ejuse_ts = data.ejuse, ejuse_over_euse_ts = data.ejuse_over_euse, cr_ts = cr_ts, ejadj_ts = data.ejadj, elecint_ts = data.elecint, eprod__over_xp0__ts = data.eprod__over_xp0_, eprod_over_xp0_ts = data.eprod_over_xp0, xp0_ts = data.xp0, xp0__ts = data.xp0_, tele0_ts = data.tele0)
+write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = data.ejuse0, ejuse_all0_ts = data.ejuse_all0, ejuse_all_ts = data.ejuse_all, ejuse_ts = data.ejuse, ejuse_over_euse_ts = data.ejuse_over_euse, cr_ts = cr_ts, ejadj_ts = data.ejadj, elecint_ts = data.elecint, eprod__over_xp0__ts = data.eprod__over_xp0_, eprod_over_xp0_ts = data.eprod_over_xp0, xp0_ts = data.xp0, xp0__ts = data.xp0_, tele0_ts = data.tele0, td_ts = data.td)
 println("wrote ", path)
 
 if simu == 1 && isfile(joinpath(out, "refcalib.xlsx"))

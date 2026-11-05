@@ -1,11 +1,11 @@
-"""
-    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing)
+﻿"""
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing, td_ts = nothing)
 
 Write the scenario workbook. Sheets are `EE`, `SCO2`, `FTOTCO2`, `AEEI`, `co2p`, and `solve_status`.
-When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `ejuse_over_euse`, `cr`, `ejadj`, `elecint`, `eprod__over_xp0_`, `eprod_over_xp0`, `xp0`, `xp0_`, and `tele0` are also written.
+When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `ejuse_over_euse`, `cr`, `ejadj`, `elecint`, `eprod__over_xp0_`, `eprod_over_xp0`, `xp0`, `xp0_`, `tele0`, and `td` are also written.
 `co2p[r]` is `CP[r] / cscale[r] * 10^4`, in USD per tonne at base-year fuel prices. It is the same for every fuel and user.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing, td_ts = nothing)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EE")
         ej[1, 1] = "year"
@@ -199,7 +199,6 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
             end
         end
 
-
         if xp0_ts !== nothing
             xsheet = XLSX.addsheet!(xf, "xp0")
             xsheet[1, 1] = "region"
@@ -237,6 +236,20 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
                 row = i + 1
                 tsheet[row, 1] = String(region)
                 tsheet[row, 2] = value
+            end
+        end
+
+        if td_ts !== nothing
+            tdsheet = XLSX.addsheet!(xf, "td")
+            tdsheet[1, 1] = "region"
+            tdsheet[1, 2] = "sector"
+            tdsheet[1, 3] = "td"
+            for (i, (key, value)) in enumerate(sort!(collect(td_ts); by = x -> x.first))
+                region, sector = key
+                row = i + 1
+                tdsheet[row, 1] = String(region)
+                tdsheet[row, 2] = String(sector)
+                tdsheet[row, 3] = value
             end
         end
 
