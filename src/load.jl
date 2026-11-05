@@ -517,7 +517,7 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
     p["xa0"] = xa0
 
     _pt("start reading electricity GAMS data")
-    t_elec = @elapsed e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_"]))
+    t_elec = @elapsed e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_", "eprod_"]))
     _pt("finished electricity GAMS data in $(round(t_elec; digits = 2)) s")
 
     _pt("start reading satellite workbook")

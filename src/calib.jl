@@ -111,10 +111,10 @@ function prepare(dat_path, elec_path, satellite)
     end
 
     a0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp0 = Dict{Tuple{Symbol,Symbol},Float64}()
     d0 = Dict{Tuple{Symbol,Symbol},Float64}()
-    dout_pd = Dict{Tuple{Symbol,Symbol},Float64}()
-    dout_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
-    dout_phom = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp0_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp0_phom = Dict{Tuple{Symbol,Symbol},Float64}()
     td = Dict{Tuple{Symbol,Symbol},Float64}()
     cons0 = Dict{Symbol,Float64}()
     inv0 = Dict{Symbol,Float64}()
@@ -140,12 +140,12 @@ function prepare(dat_path, elec_path, satellite)
             a0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) + g("xm0", (r, i)) - g("vst", (i, r))
             d0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) - g("vst", (i, r))
             xp = g("xp0", (r, i))
-            dout_pd[(r, i)] = xp
-            dout_pdb[(r, i)] = 0.0
-            dout_phom[(r, i)] = 0.0
+            xp0[(r, i)] = xp
+            xp0_pdb[(r, i)] = 0.0
+            xp0_phom[(r, i)] = 0.0
             if i == :oil
-                dout_pd[(r, i)] = 0.0
-                dout_phom[(r, i)] = xp
+                xp0[(r, i)] = 0.0
+                xp0_phom[(r, i)] = xp
             end
             td[(r, i)] = xp == 0 ? 0.0 : g("ptxy0", (r, i)) / xp
             govdem0[(r, i)] = i == :oil ? 0.0 : g("xdg0", (r, i)) + g("xmg0", (r, i))
@@ -220,13 +220,13 @@ function prepare(dat_path, elec_path, satellite)
     end
 
     for r in REGIONS
-        dout_pd[(r, :food)] -= tbo[r]
-        dout_pdb[(r, :food)] = tbo[r]
+        xp0[(r, :food)] -= tbo[r]
+        xp0_pdb[(r, :food)] = tbo[r]
         if r == :bra
-            dout_pd[(r, :food)] += tbo[r]
-            dout_pdb[(r, :food)] = 0.0
-            dout_pd[(r, :eint)] -= tbo[r]
-            dout_pdb[(r, :eint)] = tbo[r]
+            xp0[(r, :food)] += tbo[r]
+            xp0_pdb[(r, :food)] = 0.0
+            xp0[(r, :eint)] -= tbo[r]
+            xp0_pdb[(r, :eint)] = tbo[r]
         end
     end
 
@@ -277,13 +277,14 @@ function prepare(dat_path, elec_path, satellite)
     elecint = Dict(k => v for (k, v) in e["elecint"])
     ffact_e = Dict{Tuple{Symbol,Symbol},Float64}()
     nhrsigma = Dict{Tuple{Symbol,Symbol},Float64}()
-    elexp0 = Dict{Symbol,Float64}()
     sele0 = Dict{Symbol,Float64}()
     dispgen0 = Dict{Symbol,Float64}()
     wele0 = Dict{Symbol,Float64}()
     tele0 = Dict{Symbol,Float64}()
     efout0 = Dict{Symbol,Float64}()
-    techxp0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp0_ = Dict{Tuple{Symbol,Symbol},Float64}()
+    eprod__over_xp0_ = Dict{Tuple{Symbol,Symbol},Float64}()
+    eprod_over_xp0 = Dict{Symbol,Float64}()
     sav0 = Dict{Symbol,Float64}()
     ejuse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     ejuse_all0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
@@ -347,7 +348,7 @@ function prepare(dat_path, elec_path, satellite)
         ejuse0[(e, g, r)] = gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
         ejuse_all0[(e, g, r)] = gv("eind", (e, g, r))
         euse0[(e, g, r)] = xa0[(r, e, g)]
-        ejuse_over_euse[(e, g, r)] = euse0[(e, g, r)] == 0 ? 0.0 : ejuse0[(e, g, r)] / euse0[(e, g, r)]
+        ejuse_over_euse[(e, g, r)] = 0.0
     end
 
     for r in REGIONS, e in ENERGY
@@ -357,8 +358,8 @@ function prepare(dat_path, elec_path, satellite)
         ejuse_all0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) : 0.0
         euse0[(e, :households, r)] = ence1[(e, r)]
         euse0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
-        ejuse_over_euse[(e, :households, r)] = euse0[(e, :households, r)] == 0 ? 0.0 : ejuse0[(e, :households, r)] / euse0[(e, :households, r)]
-        ejuse_over_euse[(e, :htrn, r)] = euse0[(e, :htrn, r)] == 0 ? 0.0 : ejuse0[(e, :htrn, r)] / euse0[(e, :htrn, r)]
+        ejuse_over_euse[(e, :households, r)] = 0.0
+        ejuse_over_euse[(e, :htrn, r)] = 0.0
     end
 
     for r in REGIONS, e in ENERGY
@@ -372,7 +373,7 @@ function prepare(dat_path, elec_path, satellite)
             euse0[(e, i_, r)] = e == :roil ? q * cr(:roil, :elec, r) : q
             ejuse0[(e, i_, r)] = share * q
             ejuse_all0[(e, i_, r)] = share_all * q
-            ejuse_over_euse[(e, i_, r)] = euse0[(e, i_, r)] == 0 ? 0.0 : ejuse0[(e, i_, r)] / euse0[(e, i_, r)]
+            ejuse_over_euse[(e, i_, r)] = 0.0
         end
     end
 
@@ -395,6 +396,9 @@ function prepare(dat_path, elec_path, satellite)
         e, _, r = key
         ejuse_all[key] = value * ejadj_level(e, r)
     end
+    for (key, value) in euse0
+        ejuse_over_euse[key] = value == 0 ? 0.0 : ejuse[key] / value
+    end
 
     for r in REGIONS, e in ENERGY
         industry = 0.0
@@ -409,15 +413,19 @@ function prepare(dat_path, elec_path, satellite)
     end
 
     for r in REGIONS
-        elexp0[r] = g("xp0", (r, :elec))
         sele0[r] = ge("xp0_", (:sele, r))
         dispgen0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_D)
         wele0[r] = ge("xp0_", (:wele, r))
         tele0[r] = ge("xp0_", (:tele, r))
         efout0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_F)
         for i_ in TECH
-            techxp0[(i_, r)] = ge("xp0_", (i_, r))
+            xp0_[(i_, r)] = ge("xp0_", (i_, r))
+            xp = xp0_[(i_, r)]
+            eprod__over_xp0_[(i_, r)] = xp == 0 ? 0.0 : ge("eprod_", (i_, r)) / xp
         end
+        eprod_sum = sum(ge("eprod_", (i_, r)) for i_ in TECH)
+        elec_out = xp0[(r, :elec)]
+        eprod_over_xp0[r] = elec_out == 0 ? 0.0 : eprod_sum / elec_out
     end
 
     rgdp0 = Dict{Symbol,Float64}()
@@ -490,11 +498,11 @@ function prepare(dat_path, elec_path, satellite)
     return (;
         p, g, ge, REGIONS, SECTORS, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
-        a0, d0, dout_pd, dout_pdb, dout_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
+        a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, elexp0, sele0, dispgen0, wele0, tele0, efout0, techxp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, sele0, dispgen0, wele0, tele0, efout0, xp0_, eprod__over_xp0_, eprod_over_xp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
     )
 end
 

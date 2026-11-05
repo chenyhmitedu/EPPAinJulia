@@ -1,11 +1,11 @@
 """
-    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing)
+    write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing)
 
 Write the scenario workbook. Sheets are `EE`, `SCO2`, `FTOTCO2`, `AEEI`, `co2p`, and `solve_status`.
-When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `cr`, and `ejadj` are also written.
+When provided, benchmark sheets `ejuse0`, `ejuse_all0`, `ejuse_all`, `ejuse`, `ejuse_over_euse`, `cr`, `ejadj`, `elecint`, `eprod__over_xp0_`, `eprod_over_xp0`, `xp0`, `xp0_`, and `tele0` are also written.
 `co2p[r]` is `CP[r] / cscale[r] * 10^4`, in USD per tonne at base-year fuel prices. It is the same for every fuel and user.
 """
-function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing)
+function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_ts; ejuse0_ts = nothing, ejuse_all0_ts = nothing, ejuse_all_ts = nothing, ejuse_ts = nothing, ejuse_over_euse_ts = nothing, cr_ts = nothing, ejadj_ts = nothing, elecint_ts = nothing, eprod__over_xp0__ts = nothing, eprod_over_xp0_ts = nothing, xp0_ts = nothing, xp0__ts = nothing, tele0_ts = nothing)
     XLSX.openxlsx(path, mode = "w") do xf
         ej = XLSX.addsheet!(xf, "EE")
         ej[1, 1] = "year"
@@ -138,6 +138,105 @@ function write_report(path, rows, eesec_ts, sco2_ts, ftotco2_ts, aeei_ts, co2p_t
                 usheet[row, 2] = String(user)
                 usheet[row, 3] = String(region)
                 usheet[row, 4] = value
+            end
+        end
+
+        if ejuse_over_euse_ts !== nothing
+            rsheet = XLSX.addsheet!(xf, "ejuse_over_euse")
+            rsheet[1, 1] = "energy"
+            rsheet[1, 2] = "user"
+            rsheet[1, 3] = "region"
+            rsheet[1, 4] = "ejuse_over_euse"
+            for (i, (key, value)) in enumerate(sort!(collect(ejuse_over_euse_ts); by = x -> x.first))
+                energy, user, region = key
+                row = i + 1
+                rsheet[row, 1] = String(energy)
+                rsheet[row, 2] = String(user)
+                rsheet[row, 3] = String(region)
+                rsheet[row, 4] = value
+            end
+        end
+
+        if elecint_ts !== nothing
+            esheet = XLSX.addsheet!(xf, "elecint")
+            esheet[1, 1] = "tech"
+            esheet[1, 2] = "input"
+            esheet[1, 3] = "region"
+            esheet[1, 4] = "elecint"
+            for (i, (key, value)) in enumerate(sort!(collect(elecint_ts); by = x -> x.first))
+                tech, input, region = key
+                row = i + 1
+                esheet[row, 1] = String(tech)
+                esheet[row, 2] = String(input)
+                esheet[row, 3] = String(region)
+                esheet[row, 4] = value
+            end
+        end
+
+        if eprod__over_xp0__ts !== nothing
+            psheet = XLSX.addsheet!(xf, "eprod__over_xp0_")
+            psheet[1, 1] = "tech"
+            psheet[1, 2] = "region"
+            psheet[1, 3] = "eprod__over_xp0_"
+            for (i, (key, value)) in enumerate(sort!(collect(eprod__over_xp0__ts); by = x -> x.first))
+                tech, region = key
+                row = i + 1
+                psheet[row, 1] = String(tech)
+                psheet[row, 2] = String(region)
+                psheet[row, 3] = value
+            end
+        end
+
+        if eprod_over_xp0_ts !== nothing
+            psheet2 = XLSX.addsheet!(xf, "eprod_over_xp0")
+            psheet2[1, 1] = "region"
+            psheet2[1, 2] = "eprod_over_xp0"
+            for (i, (key, value)) in enumerate(sort!(collect(eprod_over_xp0_ts); by = x -> x.first))
+                region = key
+                row = i + 1
+                psheet2[row, 1] = String(region)
+                psheet2[row, 2] = value
+            end
+        end
+
+
+        if xp0_ts !== nothing
+            xsheet = XLSX.addsheet!(xf, "xp0")
+            xsheet[1, 1] = "region"
+            xsheet[1, 2] = "sector"
+            xsheet[1, 3] = "xp0"
+            for (i, (key, value)) in enumerate(sort!(collect(xp0_ts); by = x -> x.first))
+                region, sector = key
+                row = i + 1
+                xsheet[row, 1] = String(region)
+                xsheet[row, 2] = String(sector)
+                xsheet[row, 3] = value
+            end
+        end
+
+        if xp0__ts !== nothing
+            xsheet2 = XLSX.addsheet!(xf, "xp0_")
+            xsheet2[1, 1] = "tech"
+            xsheet2[1, 2] = "region"
+            xsheet2[1, 3] = "xp0_"
+            for (i, (key, value)) in enumerate(sort!(collect(xp0__ts); by = x -> x.first))
+                tech, region = key
+                row = i + 1
+                xsheet2[row, 1] = String(tech)
+                xsheet2[row, 2] = String(region)
+                xsheet2[row, 3] = value
+            end
+        end
+
+        if tele0_ts !== nothing
+            tsheet = XLSX.addsheet!(xf, "tele0")
+            tsheet[1, 1] = "region"
+            tsheet[1, 2] = "tele0"
+            for (i, (key, value)) in enumerate(sort!(collect(tele0_ts); by = x -> x.first))
+                region = key
+                row = i + 1
+                tsheet[row, 1] = String(region)
+                tsheet[row, 2] = value
             end
         end
 
