@@ -490,9 +490,18 @@ function prepare(source)
         sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
         sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
     end
+    ti(a...) = g("ti", a)
+    tf(a...) = g("tf", a)
+    tg(a...) = g("tg", a)
+    tp(a...) = g("tp", a)
+    tx(a...) = g("tx", a)
+    tm(a...) = g("tm", a)
+    pc0(a...) = g("pc0", a)
+    pg0(a...) = g("pg0", a)
     return (;
         p, g, ge, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
+        ti, tf, tg, tp, tx, tm, pc0, pg0,
         a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,

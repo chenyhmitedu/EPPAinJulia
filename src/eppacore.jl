@@ -1,4 +1,3 @@
-include("nests.jl")
 include("smooth.jl")
 
 """
@@ -27,7 +26,34 @@ function _eppacore(B, simu::Integer = 0)
     R = REGIONS
     I = SECTORS
     g = B.g
-    (; y_na, y_ei, y_ag, y_en, y_d, y_el, y_f, y_nhr, y_n, y_tech, y_de, y_arm, y_m, y_hm, y_hx) = active_blocks(B)
+    ge = B.ge
+    y_na = [(i, r) for i in NOT_AENOE for r in R if g("xp0", (r, i)) > 0]
+    y_ei = [(i, r) for i in [:eint] for r in R if g("xp0", (r, i)) > 0]
+    y_ag = [(i, r) for i in AGRI for r in R if g("xp0", (r, i)) > 0]
+    y_en = [(i, r) for i in ENOE for r in R if g("xp0", (r, i)) > 0]
+    y_el = [r for r in R if g("xp0", (r, :elec)) > 0]
+    y_d = vcat(
+        [(:na, i, r) for (i, r) in y_na],
+        [(:ei, i, r) for (i, r) in y_ei],
+        [(:ag, i, r) for (i, r) in y_ag],
+        [(:en, i, r) for (i, r) in y_en],
+        [(:el, :elec, r) for r in y_el],
+    )
+    y_f = [(i_, r) for i_ in TECH_F for r in R if ge("xp0_", (i_, r)) > 0]
+    y_nhr = [(i_, r) for i_ in TECH_NHR for r in R if ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0]
+    y_n = [(i_, r) for i_ in TECH_N for r in R if ge("xp0_", (i_, r)) > 0]
+    y_tech = [(i_, r) for i_ in [:tele] for r in R if ge("xp0_", (i_, r)) > 0]
+    y_de = vcat(
+        [(:ef, :elec, r) for r in R],
+        [(:f, i_, r) for (i_, r) in y_f],
+        [(:nhr, i_, r) for (i_, r) in y_nhr],
+        [(:n, i_, r) for (i_, r) in y_n],
+        [(:tech, i_, r) for (i_, r) in y_tech],
+    )
+    y_arm = [(i, r) for i in I if i != :oil for r in R if B.a0[(r, i)] != 0]
+    y_m = [(i, r) for i in I if i != :oil for r in R if g("xm0", (r, i)) > 0]
+    y_hm = [r for r in R if B.homm0[r] > 0]
+    y_hx = [r for r in R if B.homx0[r] > 0]
     ac_group(g) = g in I || g in TECH ? :industry : g == :households ? :households : :htrn
     ftotco20 = Dict(r => sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) for r in R)
 
@@ -53,12 +79,14 @@ function _eppacore(B, simu::Integer = 0)
         l0[r=R], B.labor[r],                                    (description = "Endowment: labor")
         ff0[i=I, r=R], B.ffact[(r, i)],                         (description = "Endowment: fixed factor and land in agri")
         ffe[i_=TECH_NHR, r=R], B.ffact_e[(i_, r)],               (description = "Endowment: fixed factor for nele, hele and rele")
-        sav[r=R], g("savf0", (r,)),                             (description = "Endowment: negative base-year trade balance")
+        sav[r=R], B.sav0[r],                             (description = "Endowment: negative base-year trade balance")
         grg[r=R], B.g0[r],                                      (description = "Base-year government expenditure")
         gdp0[r=R], B.rgdp0[r],                                  (description = "Base-year GDP")
         gp0[r=R], 1.0,                                          (description = "Calibrated productivity target")
         aeei[i=I, r=R], B.aeei[(i, r)],                         (description = "Autonomous energy efficiency factor")
         co2cap[r=R], ftotco20[r],                               (description = "Upper bound on regional combusted CO2, updated each period")
+        td[i=I, r=R], B.td[(r, i)],                             (description = "Output tax")
+        tde[i_=TECH, r=R], B.ge("td_", (r, i_)),                (description = "Output tax on an electricity technology")
     end)
 
     @commodities(MGE, begin
@@ -137,73 +165,69 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i, r) in y_na
-        q = na_block(B, i, r)
-        @production(MGE, D[(:na, i, r)], [t=2, s=q.sigu, b=>s=q.es, a=>b=q.pn, ee=>a=q.ekl, va=>ee=q.lk, en=>ee=q.noe, en1=>en=q.esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                       t,                      taxes=[Tax(RA[r], q.td)])
-            @output(PDB[:food, r],     B.xp0_pdb[(r, i)],                      t,                      taxes=[Tax(RA[r], q.td)])
-            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                      taxes=[Tax(RA[r], g("ti", (j, i, r)))],                                    reference_price=1 + g("ti", (j, i, r))) for j in NE]...
-            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                      taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            @input(PL[r],              B.labd0[(r, i)],                         va,                     taxes=[Tax(RA[r], g("tf", (:lab, i, r)))],                                 reference_price=1 + g("tf", (:lab, i, r)))
-            @input(PK[r],              B.kapd0[(r, i)],                         va,                     taxes=[Tax(RA[r], g("tf", (:cap, i, r)))],                                 reference_price=1 + g("tf", (:cap, i, r)))
+        @production(MGE, D[(:na, i, r)], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r],          B.xp0[(r, i)],                       t,                      taxes=[Tax(RA[r], td[i, r])])
+            @output(PDB[:food, r],     B.xp0_pdb[(r, i)],                      t,                      taxes=[Tax(RA[r], td[i, r])])
+            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                      taxes=[Tax(RA[r], B.ti(j, i, r))],                                    reference_price=1 + B.ti(j, i, r)) for j in NE]...
+            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                      taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            @input(PL[r],              B.labd0[(r, i)],                         va,                     taxes=[Tax(RA[r], B.tf(:lab, i, r))],                                 reference_price=1 + B.tf(:lab, i, r))
+            @input(PK[r],              B.kapd0[(r, i)],                         va,                     taxes=[Tax(RA[r], B.tf(:cap, i, r))],                                 reference_price=1 + B.tf(:cap, i, r))
             @input(PF[i, r],           B.ffact[(r, i)],	b)
-            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                    taxes=[Tax(RA[r], g("ti", (:gas, i, r)))],                                 reference_price=1 + g("ti", (:gas, i, r)))]...
-            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                   taxes=[Tax(RA[r], g("ti", (:coal, i, r)))],                                reference_price=1 + g("ti", (:coal, i, r)))]...
-            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                   taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                    taxes=[Tax(RA[r], g("ti", (:oil, i, r)))],                                 reference_price=1 + g("ti", (:oil, i, r)))]...
-            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                     taxes=[Tax(RA[r], g("ti", (:elec, i, r)))],                                reference_price=1 + g("ti", (:elec, i, r)))]...
+            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                    taxes=[Tax(RA[r], B.ti(:gas, i, r))],                                 reference_price=1 + B.ti(:gas, i, r))]...
+            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                   taxes=[Tax(RA[r], B.ti(:coal, i, r))],                                reference_price=1 + B.ti(:coal, i, r))]...
+            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                   taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                    taxes=[Tax(RA[r], B.ti(:oil, i, r))],                                 reference_price=1 + B.ti(:oil, i, r))]...
+            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                     taxes=[Tax(RA[r], B.ti(:elec, i, r))],                                reference_price=1 + B.ti(:elec, i, r))]...
         end)
     end
 
     for (i, r) in y_ei
-        q = ei_block(B, i, r)
-        @production(MGE, D[(:ei, i, r)], [t=2, s=q.sigu, b=>s=q.es, a=>b=0, ee=>a=q.ekl, va=>ee=q.lk, en=>ee=q.noe, en1=>en=q.esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                       t,                      taxes=[Tax(RA[r], q.td)])
-            @output(PDB[:eint, r],     B.xp0_pdb[(r, i)],                      t,                      taxes=[Tax(RA[r], q.td)])
-            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                      taxes=[Tax(RA[r], g("ti", (j, i, r)))],                                    reference_price=1 + g("ti", (j, i, r))) for j in NE]...
-            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                      taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            @input(PL[r],              B.labd0[(r, i)],                         va,                     taxes=[Tax(RA[r], g("tf", (:lab, i, r)))],                                 reference_price=1 + g("tf", (:lab, i, r)))
-            @input(PK[r],              B.kapd0[(r, i)],                         va,                     taxes=[Tax(RA[r], g("tf", (:cap, i, r)))],                                 reference_price=1 + g("tf", (:cap, i, r)))
+        @production(MGE, D[(:ei, i, r)], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r],          B.xp0[(r, i)],                       t,                      taxes=[Tax(RA[r], td[i, r])])
+            @output(PDB[:eint, r],     B.xp0_pdb[(r, i)],                      t,                      taxes=[Tax(RA[r], td[i, r])])
+            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                      taxes=[Tax(RA[r], B.ti(j, i, r))],                                    reference_price=1 + B.ti(j, i, r)) for j in NE]...
+            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                      taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            @input(PL[r],              B.labd0[(r, i)],                         va,                     taxes=[Tax(RA[r], B.tf(:lab, i, r))],                                 reference_price=1 + B.tf(:lab, i, r))
+            @input(PK[r],              B.kapd0[(r, i)],                         va,                     taxes=[Tax(RA[r], B.tf(:cap, i, r))],                                 reference_price=1 + B.tf(:cap, i, r))
             @input(PF[i, r],           B.ffact[(r, i)],	                        b)
-            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                    taxes=[Tax(RA[r], g("ti", (:gas, i, r)))],                                 reference_price=1 + g("ti", (:gas, i, r)))]...
-            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                   taxes=[Tax(RA[r], g("ti", (:coal, i, r)))],                                reference_price=1 + g("ti", (:coal, i, r)))]...
-            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                   taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                    taxes=[Tax(RA[r], g("ti", (:oil, i, r)))],                                 reference_price=1 + g("ti", (:oil, i, r)))]...
-            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                     taxes=[Tax(RA[r], g("ti", (:elec, i, r)))],                                reference_price=1 + g("ti", (:elec, i, r)))]...
+            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                    taxes=[Tax(RA[r], B.ti(:gas, i, r))],                                 reference_price=1 + B.ti(:gas, i, r))]...
+            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                   taxes=[Tax(RA[r], B.ti(:coal, i, r))],                                reference_price=1 + B.ti(:coal, i, r))]...
+            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                   taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                    taxes=[Tax(RA[r], B.ti(:oil, i, r))],                                 reference_price=1 + B.ti(:oil, i, r))]...
+            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                     taxes=[Tax(RA[r], B.ti(:elec, i, r))],                                reference_price=1 + B.ti(:elec, i, r))]...
         end)
     end
 
     for (i, r) in y_ag
-        q = ag_block(B, i, r)
-        @production(MGE, D[(:ag, i, r)], [t=0, s=q.sigu, a=>s=0.7, va=>a=q.lk, fx=>a=q.es, e=>fx=q.ekl, ne=>e=0, en=>e=q.noe, en1=>en=q.esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                       t,                       taxes=[Tax(RA[r], q.td)])
-            [@input(PA[j, r],          B.xa0[(r, j, i)],                        ne,                      taxes=[Tax(RA[r], g("ti", (j, i, r)))],                                    reference_price=1 + g("ti", (j, i, r))) for j in NE]...
-            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          ne,                      taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            @input(PL[r],              B.labd0[(r, i)],                         va,                      taxes=[Tax(RA[r], g("tf", (:lab, i, r)))],                                 reference_price=1 + g("tf", (:lab, i, r)))
-            @input(PK[r],              B.kapd0[(r, i)],                         va,                      taxes=[Tax(RA[r], g("tf", (:cap, i, r)))],                                 reference_price=1 + g("tf", (:cap, i, r)))
+        @production(MGE, D[(:ag, i, r)], [t=0, s=get(B.sigu, (i, r), 0.0), a=>s=0.7, va=>a=B.elas(i, :l_k, r), fx=>a=get(B.esup, (i, r), 0.0), e=>fx=B.elas(i, :e_kl, r), ne=>e=0, en=>e=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PD[i, r],          B.xp0[(r, i)],                       t,                       taxes=[Tax(RA[r], td[i, r])])
+            [@input(PA[j, r],          B.xa0[(r, j, i)],                        ne,                      taxes=[Tax(RA[r], B.ti(j, i, r))],                                    reference_price=1 + B.ti(j, i, r)) for j in NE]...
+            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          ne,                      taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            @input(PL[r],              B.labd0[(r, i)],                         va,                      taxes=[Tax(RA[r], B.tf(:lab, i, r))],                                 reference_price=1 + B.tf(:lab, i, r))
+            @input(PK[r],              B.kapd0[(r, i)],                         va,                      taxes=[Tax(RA[r], B.tf(:cap, i, r))],                                 reference_price=1 + B.tf(:cap, i, r))
             @input(PF[i, r],           B.ffact[(r, i)],	                        fx)
-            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                     taxes=[Tax(RA[r], g("ti", (:gas, i, r)))],                                 reference_price=1 + g("ti", (:gas, i, r)))]...
-            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                    taxes=[Tax(RA[r], g("ti", (:coal, i, r)))],                                reference_price=1 + g("ti", (:coal, i, r)))]...
-            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                    taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                     taxes=[Tax(RA[r], g("ti", (:oil, i, r)))],                                 reference_price=1 + g("ti", (:oil, i, r)))]...
-            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                      taxes=[Tax(RA[r], g("ti", (:elec, i, r)))],                                reference_price=1 + g("ti", (:elec, i, r)))]...
+            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                     taxes=[Tax(RA[r], B.ti(:gas, i, r))],                                 reference_price=1 + B.ti(:gas, i, r))]...
+            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                    taxes=[Tax(RA[r], B.ti(:coal, i, r))],                                reference_price=1 + B.ti(:coal, i, r))]...
+            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                    taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                     taxes=[Tax(RA[r], B.ti(:oil, i, r))],                                 reference_price=1 + B.ti(:oil, i, r))]...
+            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                      taxes=[Tax(RA[r], B.ti(:elec, i, r))],                                reference_price=1 + B.ti(:elec, i, r))]...
         end)
     end
 
     for (i, r) in y_en
-        q = en_block(B, i, r)
-        @production(MGE, D[(:en, i, r)], [t=0, s=0, b=>s=q.es, a=>b=q.pn, va=>a=q.lk, en=>a=q.noe, en1=>en=q.esb, oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PHOM[r],           B.xp0_phom[(r, i)],                     t,                       taxes=[Tax(RA[r], q.td)])
-            @output(PD[i, r],          B.xp0[(r, i)],                       t,                       taxes=[Tax(RA[r], q.td)])
-            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                       taxes=[Tax(RA[r], g("ti", (j, i, r)))],                                    reference_price=1 + g("ti", (j, i, r))) for j in NE]...
-            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                       taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            @input(PL[r],              B.labd0[(r, i)],                         va,                      taxes=[Tax(RA[r], g("tf", (:lab, i, r)))],                                 reference_price=1 + g("tf", (:lab, i, r)))
-            @input(PK[r],              B.kapd0[(r, i)],                         va,                      taxes=[Tax(RA[r], g("tf", (:cap, i, r)))],                                 reference_price=1 + g("tf", (:cap, i, r)))
+        @production(MGE, D[(:en, i, r)], [t=0, s=0, b=>s=get(B.esup, (i, r), 0.0), a=>b=0, va=>a=B.elas(i, :l_k, r), en=>a=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+            @output(PHOM[r],           B.xp0_phom[(r, i)],                     t,                       taxes=[Tax(RA[r], td[i, r])])
+            @output(PD[i, r],          B.xp0[(r, i)],                       t,                       taxes=[Tax(RA[r], td[i, r])])
+            [@input(PA[j, r],          B.xa0[(r, j, i)],                        a,                       taxes=[Tax(RA[r], B.ti(j, i, r))],                                    reference_price=1 + B.ti(j, i, r)) for j in NE]...
+            [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],          a,                       taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            @input(PL[r],              B.labd0[(r, i)],                         va,                      taxes=[Tax(RA[r], B.tf(:lab, i, r))],                                 reference_price=1 + B.tf(:lab, i, r))
+            @input(PK[r],              B.kapd0[(r, i)],                         va,                      taxes=[Tax(RA[r], B.tf(:cap, i, r))],                                 reference_price=1 + B.tf(:cap, i, r))
             @input(PF[i, r],           B.ffact[(r, i)],	                        b)
-            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                     taxes=[Tax(RA[r], g("ti", (:gas, i, r)))],                                 reference_price=1 + g("ti", (:gas, i, r)))]...
-            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                    taxes=[Tax(RA[r], g("ti", (:coal, i, r)))],                                reference_price=1 + g("ti", (:coal, i, r)))]...
-            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                    taxes=[Tax(RA[r], g("ti", (:roil, i, r)))],                                reference_price=1 + g("ti", (:roil, i, r)))]...
-            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                     taxes=[Tax(RA[r], g("ti", (:oil, i, r)))],                                 reference_price=1 + g("ti", (:oil, i, r)))]...
-            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                      taxes=[Tax(RA[r], g("ti", (:elec, i, r)))],                                reference_price=1 + g("ti", (:elec, i, r)))]...
+            [@input(PAC[:gas, r],      aeei[i, r] * B.xa0[(r, :gas, i)],        gas,                     taxes=[Tax(RA[r], B.ti(:gas, i, r))],                                 reference_price=1 + B.ti(:gas, i, r))]...
+            [@input(PAC[:coal, r],     aeei[i, r] * B.xa0[(r, :coal, i)],       coal,                    taxes=[Tax(RA[r], B.ti(:coal, i, r))],                                reference_price=1 + B.ti(:coal, i, r))]...
+            [@input(PAC[:roil, r],     aeei[i, r] * B.xaroilc[(r, i)],          roil,                    taxes=[Tax(RA[r], B.ti(:roil, i, r))],                                reference_price=1 + B.ti(:roil, i, r))]...
+            [@input(PAC[:oil, r],      aeei[i, r] * B.xa0[(r, :oil, i)],        oil,                     taxes=[Tax(RA[r], B.ti(:oil, i, r))],                                 reference_price=1 + B.ti(:oil, i, r))]...
+            [@input(PAC[:elec, r],     aeei[i, r] * B.xa0[(r, :elec, i)],       en,                      taxes=[Tax(RA[r], B.ti(:elec, i, r))],                                reference_price=1 + B.ti(:elec, i, r))]...
         end)
     end
 
@@ -222,9 +246,8 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i_, r) in y_f
-        q = tech_block(B, i_, r)
-        @production(MGE, DE[(:f, i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], q.td)])
+        @production(MGE, DE[(:f, i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                                    ac,     taxes=[Tax(RA[r], B.elecint[(i_, j, r)])],                    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                                curb,   taxes=[Tax(RA[r], B.elecint[(i_, :gas, r)])],                  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],                               curb,   taxes=[Tax(RA[r], B.elecint[(i_, :coal, r)])],                 reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -239,9 +262,8 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i_, r) in y_nhr
-        q = nhr_block(B, i_, r)
-        @production(MGE, DE[(:nhr, i_, r)], [t=0, s=0, bc=>s=q.sig, ac=>bc=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDE[:dispgen, r],  B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], q.td)])
+        @production(MGE, DE[(:nhr, i_, r)], [t=0, s=0, bc=>s=B.nhrsigma[(i_, r)], ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+            @output(PDE[:dispgen, r],  B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                                    ac,     taxes=[Tax(RA[r], B.elecint[(i_, j, r)])],                    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                                curb,   taxes=[Tax(RA[r], B.elecint[(i_, :gas, r)])],                  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],                               curb,   taxes=[Tax(RA[r], B.elecint[(i_, :coal, r)])],                 reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -256,9 +278,8 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i_, r) in y_n
-        q = renewable_block(B, i_, r)
-        @production(MGE, DE[(:n, i_, r)], [t=0, s=0, s001=>s=q.sig, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], q.td)])
+        @production(MGE, DE[(:n, i_, r)], [t=0, s=0, s001=>s=get(B.wst, (i_, r), 0.0), ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                                    ac,     taxes=[Tax(RA[r], B.elecint[(i_, j, r)])],                    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                                curb,   taxes=[Tax(RA[r], B.elecint[(i_, :gas, r)])],                  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],                               curb,   taxes=[Tax(RA[r], B.elecint[(i_, :coal, r)])],                 reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -272,9 +293,8 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i_, r) in y_tech
-        q = tech_block(B, i_, r)
-        @production(MGE, DE[(:tech, i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=q.ekl, curb=>eec=0, vac=>eec=q.lk], begin
-            @output(PDE[:tnd, r],      B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], q.td)])
+        @production(MGE, DE[(:tech, i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+            @output(PDE[:tnd, r],      B.xp0_[(i_, r)],                                                      t,      taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                                    ac,     taxes=[Tax(RA[r], B.elecint[(i_, j, r)])],                    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                                curb,   taxes=[Tax(RA[r], B.elecint[(i_, :gas, r)])],                  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],                               curb,   taxes=[Tax(RA[r], B.elecint[(i_, :coal, r)])],                 reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -290,8 +310,8 @@ function _eppacore(B, simu::Integer = 0)
     for r in R
         @production(MGE, GOVT[r], [t=0, s=0.5], begin
             @output(PG[r],             B.g0[r],                                t)
-            [@input(PA[i, r],          B.govdem0[(r, i)],                      s,                      taxes=[Tax(RA[r], g("tg", (i, r)))],                           reference_price=g("pg0", (i, r))) for i in I]...
-            @input(PHOM[r],            B.govoil0[r],                           s,                      taxes=[Tax(RA[r], g("tg", (:oil, r)))],                        reference_price=g("pg0", (:oil, r)))
+            [@input(PA[i, r],          B.govdem0[(r, i)],                      s,                      taxes=[Tax(RA[r], B.tg(i, r))],                           reference_price=B.pg0(i, r)) for i in I]...
+            @input(PHOM[r],            B.govoil0[r],                           s,                      taxes=[Tax(RA[r], B.tg(:oil, r))],                        reference_price=B.pg0(:oil, r))
         end)
         @production(MGE, INV[r], [t=0, s=5], begin
             @output(PINV[r],           B.inv0[r],                              t)
@@ -306,23 +326,23 @@ function _eppacore(B, simu::Integer = 0)
     end)
 
     for r in R
-        h = hh_block(B, r)
-        @production(MGE, HNEW[r], [t=0, s=0.1, a=>s=h.tn1, c=>a=0, b=>s=1], begin
+        foodp = r == :bra ? :eint : :food
+        @production(MGE, HNEW[r], [t=0, s=0.1, a=>s=(r == :usa || r == :eur ? 0.75 : 1.0), c=>a=0, b=>s=1], begin
             @output(PTNN[r],           B.own[r] * HTRNS,                                t)
-            @input(PAC[:roil, r],      B.tfo[r] * HTRNS * B.cr(:roil, :final, r),       c,              taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PA[:roil, r],       B.tfo[r] * HTRNS * (1 - B.cr(:roil, :final, r)), c,              taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PDB[h.foodp, r],    B.tbo[r] * HTRNS,                                c,              taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PA[:othr, r],       B.toi[r] * HTRNS * PROPFRAC,                     a,              taxes=[Tax(RA[r], g("tp", (:othr, r)))],                       reference_price=g("pc0", (:othr, r)))
-            @input(PA[:othr, r],       B.toi[r] * HTRNS * (1 - PROPFRAC),               b,              taxes=[Tax(RA[r], g("tp", (:othr, r)))],                       reference_price=g("pc0", (:othr, r)))
-            @input(PA[:serv, r],       B.tse[r] * HTRNS,                                b,              taxes=[Tax(RA[r], g("tp", (:serv, r)))],                       reference_price=g("pc0", (:serv, r)))
+            @input(PAC[:roil, r],      B.tfo[r] * HTRNS * B.cr(:roil, :final, r),       c,              taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PA[:roil, r],       B.tfo[r] * HTRNS * (1 - B.cr(:roil, :final, r)), c,              taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PDB[foodp, r],      B.tbo[r] * HTRNS,                                c,              taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PA[:othr, r],       B.toi[r] * HTRNS * PROPFRAC,                     a,              taxes=[Tax(RA[r], B.tp(:othr, r))],                       reference_price=B.pc0(:othr, r))
+            @input(PA[:othr, r],       B.toi[r] * HTRNS * (1 - PROPFRAC),               b,              taxes=[Tax(RA[r], B.tp(:othr, r))],                       reference_price=B.pc0(:othr, r))
+            @input(PA[:serv, r],       B.tse[r] * HTRNS,                                b,              taxes=[Tax(RA[r], B.tp(:serv, r))],                       reference_price=B.pc0(:serv, r))
         end)
         @production(MGE, HOLD[r], [t=0, s=0], begin
             @output(PTNV[r],           (1 - HTRNS) * B.own[r],                          t)
-            @input(PAC[:roil, r],      (1 - HTRNS) * B.tfo[r] * B.cr(:roil, :final, r), s,              taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PA[:roil, r],       (1 - HTRNS) * B.tfo[r] * (1 - B.cr(:roil, :final, r)), s,        taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PDB[h.foodp, r],    (1 - HTRNS) * B.tbo[r],                          s,              taxes=[Tax(RA[r], h.tpR)],                                     reference_price=h.pcR)
-            @input(PA[:othr, r],       (1 - HTRNS) * B.toi[r],                          s,              taxes=[Tax(RA[r], g("tp", (:othr, r)))],                       reference_price=g("pc0", (:othr, r)))
-            @input(PA[:serv, r],       (1 - HTRNS) * B.tse[r],                          s,              taxes=[Tax(RA[r], g("tp", (:serv, r)))],                       reference_price=g("pc0", (:serv, r)))
+            @input(PAC[:roil, r],      (1 - HTRNS) * B.tfo[r] * B.cr(:roil, :final, r), s,              taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PA[:roil, r],       (1 - HTRNS) * B.tfo[r] * (1 - B.cr(:roil, :final, r)), s,        taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PDB[foodp, r],      (1 - HTRNS) * B.tbo[r],                          s,              taxes=[Tax(RA[r], B.tp(:roil, r))],                            reference_price=B.pc0(:roil, r))
+            @input(PA[:othr, r],       (1 - HTRNS) * B.toi[r],                          s,              taxes=[Tax(RA[r], B.tp(:othr, r))],                       reference_price=B.pc0(:othr, r))
+            @input(PA[:serv, r],       (1 - HTRNS) * B.tse[r],                          s,              taxes=[Tax(RA[r], B.tp(:serv, r))],                       reference_price=B.pc0(:serv, r))
         end)
         @production(MGE, HAGG[r], [t=4, s=0], begin
             @output(PTN[r],            B.own[r] * 0.2,                                  t)
@@ -332,22 +352,22 @@ function _eppacore(B, simu::Integer = 0)
         end)            
         @production(MGE, HTRN[r], [t=0, s=0.2, s1=>s=4], begin          
             @output(PTRN[r],           B.tottrn[r],                                     t)
-            @input(PA[:tran, r],       B.purtrn[r],                                     s,              taxes=[Tax(RA[r], g("tp", (:tran, r)))],                       reference_price=g("pc0", (:tran, r)))
+            @input(PA[:tran, r],       B.purtrn[r],                                     s,              taxes=[Tax(RA[r], B.tp(:tran, r))],                       reference_price=B.pc0(:tran, r))
             @input(PTN[r],             B.own[r] * 0.2,                                  s1)
             @input(PTNS[r],            B.own[r] * 0.8,                                  s1)
         end)
 
-        @production(MGE, Z[r], [t=0, s=0.5, u=>s=0.25, a=>u=h.delas, dw=>u=0.3, en=>dw=h.noe, oil=>en=0, gas=>en=0, coal=>en=0, roil=>en=0, elec=>en=0], begin
-            @output(PU[r],             g("cons0", (r,)) + B.hhwedge[r],                 t)
+        @production(MGE, Z[r], [t=0, s=0.5, u=>s=0.25, a=>u=get(B.delas, (r,), 0.0), dw=>u=0.3, en=>dw=B.elas(:hh, :noe_el, r), oil=>en=0, gas=>en=0, coal=>en=0, roil=>en=0, elec=>en=0], begin
+            @output(PU[r],             B.cons0[r] + B.hhwedge[r],                 t)
             @input(PTRN[r],            B.tottrn[r],                                     s)
-            [@input(PA[i, r],          B.xh[(i, r)],                                    a,              taxes=[Tax(RA[r], g("tp", (i, r)))],                           reference_price=g("pc0", (i, r))) for i in NENDT]...
-            [@input(PA[:dwe, r],       B.xh[(:dwe, r)],                                 dw,             taxes=[Tax(RA[r], g("tp", (:dwe, r)))],                        reference_price=g("pc0", (:dwe, r)))]...
-            @input(PAC[:oil, r],       B.ence1[(:oil, r)],                              oil,            taxes=[Tax(RA[r], g("tp", (:oil, r)))],                        reference_price=g("pc0", (:oil, r)))
-            @input(PAC[:gas, r],       B.ence1[(:gas, r)],                              gas,            taxes=[Tax(RA[r], g("tp", (:gas, r)))],                        reference_price=g("pc0", (:gas, r)))
-            @input(PAC[:coal, r],      B.ence1[(:coal, r)],                             coal,           taxes=[Tax(RA[r], g("tp", (:coal, r)))],                       reference_price=g("pc0", (:coal, r)))
-            @input(PAC[:roil, r],      B.ence1[(:roil, r)] * B.cr(:roil, :final, r),    roil,           taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
-            @input(PA[:roil, r],       B.ence1[(:roil, r)] * (1 - B.cr(:roil, :final, r)), roil,        taxes=[Tax(RA[r], g("tp", (:roil, r)))],                       reference_price=g("pc0", (:roil, r)))
-            @input(PAC[:elec, r],      B.ence1[(:elec, r)],                             elec,           taxes=[Tax(RA[r], g("tp", (:elec, r)))],                       reference_price=g("pc0", (:elec, r)))
+            [@input(PA[i, r],          B.xh[(i, r)],                                    a,              taxes=[Tax(RA[r], B.tp(i, r))],                           reference_price=B.pc0(i, r)) for i in NENDT]...
+            [@input(PA[:dwe, r],       B.xh[(:dwe, r)],                                 dw,             taxes=[Tax(RA[r], B.tp(:dwe, r))],                        reference_price=B.pc0(:dwe, r))]...
+            @input(PAC[:oil, r],       B.ence1[(:oil, r)],                              oil,            taxes=[Tax(RA[r], B.tp(:oil, r))],                        reference_price=B.pc0(:oil, r))
+            @input(PAC[:gas, r],       B.ence1[(:gas, r)],                              gas,            taxes=[Tax(RA[r], B.tp(:gas, r))],                        reference_price=B.pc0(:gas, r))
+            @input(PAC[:coal, r],      B.ence1[(:coal, r)],                             coal,           taxes=[Tax(RA[r], B.tp(:coal, r))],                       reference_price=B.pc0(:coal, r))
+            @input(PAC[:roil, r],      B.ence1[(:roil, r)] * B.cr(:roil, :final, r),    roil,           taxes=[Tax(RA[r], B.tp(:roil, r))],                       reference_price=B.pc0(:roil, r))
+            @input(PA[:roil, r],       B.ence1[(:roil, r)] * (1 - B.cr(:roil, :final, r)), roil,        taxes=[Tax(RA[r], B.tp(:roil, r))],                       reference_price=B.pc0(:roil, r))
+            @input(PAC[:elec, r],      B.ence1[(:elec, r)],                             elec,           taxes=[Tax(RA[r], B.tp(:elec, r))],                       reference_price=B.pc0(:elec, r))
         end)
         @production(MGE, W[r], [t=0, s=0], begin
             @output(PW[r],             B.cons0[r] + B.inv0[r] + B.hhwedge[r],           t)
@@ -367,8 +387,8 @@ function _eppacore(B, simu::Integer = 0)
     for (i, r) in y_m
         @production(MGE, M[(i, r)], [t=0, s=B.elas(i, :smm, r), src[rr=R]=>s=0], begin
             @output(PM[i, r],          B.xm0[(r, i)],                                   t)
-            [@input(PD[i, rr],         B.wtflow[(r, rr, i)],                            src[rr],        taxes=[Tax(RA[rr], g("tx", (i, rr, r))), Tax(RA[r], g("tm", (i, rr, r)) * (1 + g("tx", (i, rr, r))))], reference_price=(1 + g("tx", (i, rr, r))) * (1 + g("tm", (i, rr, r)))) for rr in R]...
-            [@input(PT,                B.mvtwr[(r, rr, i)],                             src[rr],        taxes=[Tax(RA[r], g("tm", (i, rr, r)))],                                   reference_price=1 + g("tm", (i, rr, r))) for rr in R]...
+            [@input(PD[i, rr],         B.wtflow[(r, rr, i)],                            src[rr],        taxes=[Tax(RA[rr], B.tx(i, rr, r)), Tax(RA[r], B.tm(i, rr, r) * (1 + B.tx(i, rr, r)))], reference_price=(1 + B.tx(i, rr, r)) * (1 + B.tm(i, rr, r))) for rr in R]...
+            [@input(PT,                B.mvtwr[(r, rr, i)],                             src[rr],        taxes=[Tax(RA[r], B.tm(i, rr, r))],                                   reference_price=1 + B.tm(i, rr, r)) for rr in R]...
         end)
     end
 
@@ -428,14 +448,14 @@ function _eppacore(B, simu::Integer = 0)
 
         @aux_constraint(MGE, RGDP[r],
             PU[r] * RGDP[r] 
-                - PU[r] * g("cons0", (r,)) * Z[r] 
+                - PU[r] * B.cons0[r] * Z[r] 
                 - B.inv0[r] * PINV[r] * INV[r] 
                 - B.g0[r] * PG[r] * GOVT[r] 
-                - sum((1 + g("tx", (i, r, rr))) * PD[i, r] * g("wtflow0", (rr, r, i)) 
-                    for rr in R for i in I if i != :oil && g("wtflow0", (rr, r, i)) > 0; init=0) 
+                - sum((1 + B.tx(i, r, rr)) * PD[i, r] * B.wtflow[(rr, r, i)] 
+                    for rr in R for i in I if i != :oil && B.wtflow[(rr, r, i)] > 0; init=0) 
                 - (B.homx0[r] > 0 ? PWH * B.homx0[r] * HOMX[r] : 0)
-                + sum((1 + g("tx", (i, rr, r))) * PD[i, rr] * g("wtflow0", (r, rr, i)) 
-                    for rr in R for i in I if i != :oil && g("wtflow0", (r, rr, i)) > 0; init=0) 
+                + sum((1 + B.tx(i, rr, r)) * PD[i, rr] * B.wtflow[(r, rr, i)] 
+                    for rr in R for i in I if i != :oil && B.wtflow[(r, rr, i)] > 0; init=0) 
                 + (B.homm0[r] > 0 ? PWH * B.homm0[r] * HOMM[r] : 0)
             )
         
@@ -457,7 +477,7 @@ function _eppacore(B, simu::Integer = 0)
     state = (; MGE, R, k0, l0, sav, grg, gdp0, aeei, GPROD, RGDP, gp0 = gp0_param, simu,
         CT, co2cap, ftotco20, cperv, cscale,
         kapital0 = copy(B.kapital), labor0 = copy(B.labor),
-        labor_pre = Dict(r => sum(g("labd0", (r, i)) for i in I) + g("labdg0", (r,)) for r in R),
+        labor_pre = copy(B.labor),
         inv0 = copy(B.inv0), scale = Dict{Symbol,Float64}())
     srve0 = (1 - DPE)^regular_step()
     for r in R
