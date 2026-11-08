@@ -78,3 +78,60 @@ function _save_model_cache(key, simu, MGE, st)
     flush(stdout)
     return path
 end
+
+"""
+    MGE_model(B; simu::Integer = 0)
+
+Build the MPSGE model for benchmark `B`.
+
+A previous build is reloaded from `cache/` when the Julia source, benchmark
+files, period list, and `simu` are unchanged. The loaded JuMP subexpression
+cache is discarded: a serialized `WeakKeyDict` crashes Julia 1.12 while the
+benchmark constraints are created. A cache miss rebuilds with `Base.invokelatest`.
+"""
+function MGE_model(B; simu::Integer = 0)
+    apply_smooth!()
+    simu = Int(simu)
+    key = _model_cache_key(simu)
+    loaded = try
+        _try_load_model_cache(key, simu)
+    catch err
+        println("model cache unreadable (", err, "); rebuilding")
+        flush(stdout)
+        nothing
+    end
+    if loaded !== nothing
+        println("model cache hit")
+        flush(stdout)
+        return loaded
+    end
+    MGE, st = Base.invokelatest(_eppacore, B, simu)
+    try
+        _save_model_cache(key, simu, MGE, st)
+    catch err
+        println("model cache not saved (", err, ")")
+        flush(stdout)
+    end
+    return MGE, st
+end
+
+"""
+    EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
+
+Base-year model, before any endowment update.
+
+`iter` must be `-1`. `solve!(MGE; cumulative_iteration_limit = 0)` then reports
+the benchmark residual. Later years are solved by [`run_scenario`](@ref).
+"""
+function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
+    iter == -1 || throw(ArgumentError(
+        "EPPA_model(data, -1) is the base-year model. Later years are solved by run_scenario.",
+    ))
+    bau = simu == 1 ? _load_bau() : nothing
+    MGE, st = MGE_model(data; simu)
+    simu == 1 && _install_gprod!(st, bau, YEARS[1])
+    return MGE
+end
+
+
+

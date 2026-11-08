@@ -1,59 +1,8 @@
-"""
-    build_model(B; simu::Integer = 0)
-
-Build the MPSGE model for benchmark `B`.
-
-A previous build is reloaded from `cache/` when the Julia source, benchmark
-files, period list, and `simu` are unchanged. The loaded JuMP subexpression
-cache is discarded: a serialized `WeakKeyDict` crashes Julia 1.12 while the
-benchmark constraints are created. A cache miss rebuilds with `Base.invokelatest`.
-"""
-function build_model(B; simu::Integer = 0)
-    apply_smooth!()
-    simu = Int(simu)
-    key = _model_cache_key(simu)
-    loaded = try
-        _try_load_model_cache(key, simu)
-    catch err
-        println("model cache unreadable (", err, "); rebuilding")
-        flush(stdout)
-        nothing
-    end
-    if loaded !== nothing
-        println("model cache hit")
-        flush(stdout)
-        return loaded
-    end
-    MGE, st = Base.invokelatest(_build_model, B, simu)
-    try
-        _save_model_cache(key, simu, MGE, st)
-    catch err
-        println("model cache not saved (", err, ")")
-        flush(stdout)
-    end
-    return MGE, st
-end
+include("nests.jl")
+include("smooth.jl")
 
 """
-    EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
-
-Base-year model, before any endowment update.
-
-`iter` must be `-1`. `solve!(MGE; cumulative_iteration_limit = 0)` then reports
-the benchmark residual. Later years are solved by [`run_scenario`](@ref).
-"""
-function EPPA_model(data, iter::Integer = -1; simu::Integer = 0)
-    iter == -1 || throw(ArgumentError(
-        "EPPA_model(data, -1) is the base-year model. Later years are solved by run_scenario.",
-    ))
-    bau = simu == 1 ? _load_bau() : nothing
-    MGE, st = build_model(data; simu)
-    simu == 1 && _install_gprod!(st, bau, YEARS[1])
-    return MGE
-end
-
-"""
-    _build_model(B, simu::Integer = 0)
+    _eppacore(B, simu::Integer = 0)
 
 Declare the active EPPA blocks.
 
@@ -72,7 +21,7 @@ the two conventional streams directly.
 when `simu = 0`. In that case `GPROD` meets the GDP target. When `simu = 1`,
 `GPROD` is held at the calibrated value.
 """
-function _build_model(B, simu::Integer = 0)
+function _eppacore(B, simu::Integer = 0)
     PATHSolver.c_api_License_SetString(PATH_LICENSE)
     MGE = MPSGEModel()
     R = REGIONS
@@ -516,3 +465,4 @@ function _build_model(B, simu::Integer = 0)
     end
     return MGE, state
 end
+

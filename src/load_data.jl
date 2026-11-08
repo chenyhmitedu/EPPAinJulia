@@ -75,16 +75,14 @@ function regular_step()
     return length(YEARS) >= 3 ? step_years(2) : step_years(1)
 end
 
-function load_gams_dat(path, wanted::Set{String})
+function load_gams_dat(path)
     out = Dict{String,Dict{Tuple,Float64}}()
-    for w in wanted
-        out[w] = Dict{Tuple,Float64}()
-    end
     name = ""
     open(path) do io
         for line in eachline(io)
             if startswith(line, "parameter ")
                 name = split(strip(line), r"\s+|/")[2]
+                get!(out, name, Dict{Tuple,Float64}())
                 continue
             end
             isempty(name) && continue
@@ -92,7 +90,6 @@ function load_gams_dat(path, wanted::Set{String})
                 name = ""
                 continue
             end
-            haskey(out, name) || continue
             s = strip(line)
             (isempty(s) || startswith(s, "*") || startswith(s, "\$")) && continue
             parts = split(s)
@@ -378,19 +375,12 @@ function satellite_lines(path, names)
     return book
 end
 
-function load_benchmark(dat_path, satellite)
-    wanted = Set([
-        "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
-        "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
-        "ti", "tf", "tp", "pg0", "ptxy0", "tx", "tm", "wtflow0", "vtwr",
-        "savf0", "cons0", "kapdg0",
-    ])
-    p = load_gams_dat(dat_path, wanted)
+function load_benchmark(source)
+    p = source.dat
     regions = sort!(unique(first.(keys(p["cons0"]))))
     sectors = sort!(unique(last.(keys(p["xp0"]))))
-    book = satellite_lines(satellite, ("eppatrend_argdpgrrate", "eppatrend_popa_eppa"))
-    ann = load_t_table(book["eppatrend_argdpgrrate"])
-    pop = load_t_table(book["eppatrend_popa_eppa"])
+    ann = load_t_table(source.satellite["eppatrend_argdpgrrate"])
+    pop = load_t_table(source.satellite["eppatrend_popa_eppa"])
     return (; p, regions, sectors, ann, pop)
 end
 
@@ -489,24 +479,8 @@ function load_assigns(lines)
     return data
 end
 
-function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
-    _pt(msg) = begin
-        verbose || return nothing
-        println("prepare: ", msg)
-        flush(stdout)
-        return nothing
-    end
-    wanted = Set([
-        "xp0", "es0", "xm0", "vst", "labd0", "kapd0", "ffactd0",
-        "xdp0", "xmp0", "xdc0", "xmc0", "xdg0", "xmg0", "xdi0", "xmi0",
-        "ti", "tf", "tp", "tg", "pg0", "pc0", "pf0", "ptxy0",
-        "tx", "tm", "wtflow0", "vtwr", "savf0", "cons0", "kapdg0", "labdg0", "trg0",
-        "efd", "savh0", "eind",
-    ])
-    _pt("start reading main GAMS data")
-    t_main = @elapsed p = load_gams_dat(dat_path, wanted)
-    _pt("finished main GAMS data in $(round(t_main; digits = 2)) s")
-
+function load_prepare_inputs(source)
+    p = source.dat
     xa0 = Dict{Tuple,Float64}()
     for (key, v) in p["xdp0"]
         xa0[key] = v
@@ -515,62 +489,93 @@ function load_prepare_inputs(dat_path, elec_path, satellite; verbose = true)
         xa0[key] = get(xa0, key, 0.0) + v
     end
     p["xa0"] = xa0
+    e = source.elec
+    book = source.satellite
 
-    _pt("start reading electricity GAMS data")
-    t_elec = @elapsed e = load_gams_dat(elec_path, Set(["elecin", "elecint", "xp0_", "td_", "eprod_"]))
-    _pt("finished electricity GAMS data in $(round(t_elec; digits = 2)) s")
-
-    _pt("start reading satellite workbook")
-    t_xlsx = @elapsed book = satellite_lines(satellite, (
-        "eppaelas_selas", "eppaelas_esup", "eppaelas_esube", "eppaelas_sigu", "eppaelas_d_elas",
-        "eppacalib_crtable", "readgtap_bio", "elecpower_nhreta", "elecpower_wstsigma",
-        "eppa_htrn_os", "eppa_htrn_es", "eppa_htrn_mvh",
-        "readgtap_ej_use_iea", "other_epslon", "other_period",
-        "eppatrend_argdpgrrate", "eppatrend_popa_eppa", "eppatrend_aeeigr",
-    ))
-    _pt("finished satellite workbook in $(round(t_xlsx; digits = 2)) s")
-
-    _pt("start parsing satellite tables")
-    t_tables = @elapsed begin
-        selas = load_gms_table(book["eppaelas_selas"])
-        for (k, v) in selas
-            if length(k) == 3 && k[2] == :noe_el
-                selas[k] = 3v
-            end
+    selas = load_gms_table(book["eppaelas_selas"])
+    for (k, v) in selas
+        if length(k) == 3 && k[2] == :noe_el
+            selas[k] = 3v
         end
-        esup = load_gms_table(book["eppaelas_esup"])
-        esube = load_gms_table(book["eppaelas_esube"])
-        sigu = load_gms_table(book["eppaelas_sigu"])
-        delas_raw = Dict{Tuple,Float64}()
-        for ln in book["eppaelas_d_elas"]
-            s = strip(ln)
-            (isempty(s) || startswith(s, "*") || startswith(s, "/") || startswith(lowercase(s), "parameter")) && continue
-            parts = split(s)
-            length(parts) < 2 && continue
-            v = tryparse(Float64, parts[end])
-            v === nothing && continue
-            delas_raw[(Symbol(lowercase(parts[1])),)] = v
-        end
-        delas = delas_raw
-        crtable = load_gms_table(book["eppacalib_crtable"]; duplicate = :first)
-        bio = load_gms_table(book["readgtap_bio"])
-        nhreta = load_gms_table(book["elecpower_nhreta"])
-        wst = load_gms_table(book["elecpower_wstsigma"])
-        os = load_assigns(book["eppa_htrn_os"])
-        esh = load_assigns(book["eppa_htrn_es"])
-        mvh = load_assigns(book["eppa_htrn_mvh"])
-        ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
-        epslon_raw = load_gms_table(book["other_epslon"])
-        ann = load_t_table(book["eppatrend_argdpgrrate"])
-        pop = load_t_table(book["eppatrend_popa_eppa"])
-        aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
-        years = load_period_set(book["other_period"])
     end
-    _pt("finished parsing satellite tables in $(round(t_tables; digits = 2)) s")
+    esup = load_gms_table(book["eppaelas_esup"])
+    esube = load_gms_table(book["eppaelas_esube"])
+    sigu = load_gms_table(book["eppaelas_sigu"])
+    delas_raw = Dict{Tuple,Float64}()
+    for ln in book["eppaelas_d_elas"]
+        s = strip(ln)
+        (isempty(s) || startswith(s, "*") || startswith(s, "/") || startswith(lowercase(s), "parameter")) && continue
+        parts = split(s)
+        length(parts) < 2 && continue
+        v = tryparse(Float64, parts[end])
+        v === nothing && continue
+        delas_raw[(Symbol(lowercase(parts[1])),)] = v
+    end
+    delas = delas_raw
+    crtable = load_gms_table(book["eppacalib_crtable"]; duplicate = :first)
+    bio = load_gms_table(book["readgtap_bio"])
+    nhreta = load_gms_table(book["elecpower_nhreta"])
+    wst = load_gms_table(book["elecpower_wstsigma"])
+    os = load_assigns(book["eppa_htrn_os"])
+    esh = load_assigns(book["eppa_htrn_es"])
+    mvh = load_assigns(book["eppa_htrn_mvh"])
+    ej_use_iea = load_gms_table(book["readgtap_ej_use_iea"])
+    epslon_raw = load_gms_table(book["other_epslon"])
+    ann = load_t_table(book["eppatrend_argdpgrrate"])
+    pop = load_t_table(book["eppatrend_popa_eppa"])
+    aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
+    years = load_period_set(book["other_period"])
 
     g(name, key) = get(p[name], key, 0.0)
     ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, epslon_raw, ann, pop, aeeigr_raw, years)
+    return (; p, e, g, ge, satellite = book, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, epslon_raw, ann, pop, aeeigr_raw, years)
 end
 
+"""
+    load_satellite(path)
 
+Every worksheet of `satellite.xlsx`, as the text rows used by the GAMS table parsers.
+"""
+function load_satellite(path)
+    reader = XLSX.ZipArchives.ZipReader(read(path))
+    names = sort!(collect(keys(_sheet_targets(reader))))
+    return satellite_lines(path, names)
+end
+
+"""
+    load_data(dat_path, elec_path, satellite_path)
+
+Read the benchmark GAMS dumps and every satellite sheet into one object.
+
+`dat` and `elec` hold every parameter in the two `.dat` files.
+`satellite` holds every worksheet.
+"""
+function load_data(dat_path, elec_path, satellite_path)
+    return (
+        dat = load_gams_dat(dat_path),
+        elec = load_gams_dat(elec_path),
+        satellite = load_satellite(satellite_path),
+    )
+end
+
+"""
+    gams_table(text) -> Dict{Tuple{Symbol,Int},Float64}
+
+Read a GAMS-style table. The first line is the column headers (years). Each
+later line is a row label and one number per column.
+"""
+function gams_table(text::AbstractString)
+    lines = [strip(line) for line in split(text, '\n') if !isempty(strip(line)) && !startswith(lstrip(line), '*')]
+    isempty(lines) && error("gams table is empty")
+    years = [parse(Int, h) for h in split(lines[1])]
+    out = Dict{Tuple{Symbol,Int},Float64}()
+    for line in lines[2:end]
+        parts = split(line)
+        length(parts) == length(years) + 1 || error("row $(parts[1]) has $(length(parts) - 1) values, expected $(length(years))")
+        r = Symbol(parts[1])
+        for (t, v) in zip(years, parts[2:end])
+            out[(r, t)] = parse(Float64, v)
+        end
+    end
+    return out
+end

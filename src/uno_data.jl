@@ -26,9 +26,10 @@ const DPE = 0.05
 const ROR = 0.1
 
 """
-    prepare(dat_path, elec_path, satellite)
+    prepare(source)
 
-Build the benchmark accounts for the active v-ref structure.
+Build the benchmark accounts for the active v-ref structure. `source` is the
+object returned by `load_data`.
 
 Vintage capital, backstops, land-use change, Stone-Geary preferences, and
 emissions are off. Emission pass-through nests are identities at a zero carbon
@@ -42,9 +43,8 @@ follows `elecpower.gms` and rewrites local copies of `elecin`. A production
 identity is checked for the non-electricity GTAP sectors. Solve periods are
 the GAMS set on the `other_period` sheet.
 """
-function prepare(dat_path, elec_path, satellite)
-    _pt(msg) = (println("prepare: ", msg); flush(stdout))
-    raw = load_prepare_inputs(dat_path, elec_path, satellite)
+function prepare(source)
+    raw = load_prepare_inputs(source)
     set_model_years!(raw.years)
     println("periods ", join(YEARS, " "))
     p = raw.p
@@ -95,8 +95,6 @@ function prepare(dat_path, elec_path, satellite)
         sco2coef[e] = 100 * (44 / 12) * epslon(e)
     end
 
-    _pt("start benchmark calibration assembly")
-    t_assemble = @elapsed begin
     ffact = Dict{Tuple{Symbol,Symbol},Float64}()
     ffend0 = Dict{Tuple{Symbol,Symbol},Float64}()
     ffgprod0 = Dict{Tuple{Symbol,Symbol},Float64}()
@@ -492,11 +490,8 @@ function prepare(dat_path, elec_path, satellite)
         sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
         sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
     end
-
-    end
-    _pt("finished benchmark calibration assembly in $(round(t_assemble; digits = 2)) s")
     return (;
-        p, g, ge, REGIONS, SECTORS, ann, pop,
+        p, g, ge, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
         elas, esup, esube, sigu, delas, cr, wst,
         a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,

@@ -1,10 +1,9 @@
-﻿using Pkg
+using Pkg
 Pkg.activate(".")
 Pkg.instantiate()
 
 using EPPAinJulia
 using MPSGE: solve!
-using Dates
 
 casefile = isempty(ARGS) ? joinpath(@__DIR__, "active", "refcalib.jl") : ARGS[1]
 if !isabspath(casefile)
@@ -14,29 +13,19 @@ end
 include(casefile)
 casename = splitext(basename(casefile))[1]
 
-function stamp(msg)
-    println("[", Dates.format(now(), "HH:MM:SS"), "] ", msg)
-    flush(stdout)
-end
-
 here = joinpath(@__DIR__, "data")
-stamp("starting data preparation")
-t_prepare = @elapsed data = prepare(
+data = prepare(load_data(
     joinpath(here, "eppa8data_2017.dat"),
     joinpath(here, "eppa8data_elec_2017.dat"),
     joinpath(here, "satellite.xlsx"),
-)
-stamp("finished data preparation in $(round(t_prepare; digits = 2)) s")
+))
 println("regions ", length(data.REGIONS))
 
 println("\n================ base-year calibration check ================")
 flush(stdout)
-stamp("starting EPPA_model build")
-t_build = @elapsed MGE = EPPA_model(data, -1; simu)
-stamp("finished EPPA_model build in $(round(t_build; digits = 2)) s")
-stamp("starting zero-iteration benchmark solve")
-t_bench = @elapsed solve!(MGE, cumulative_iteration_limit = 0)
-stamp("finished zero-iteration benchmark solve in $(round(t_bench; digits = 2)) s")
+MGE = EPPA_model(data, -1; simu)
+solve!(MGE, cumulative_iteration_limit = 0)
+
 out = joinpath(@__DIR__, "results")
 mkpath(out)
 path = joinpath(out, casename * ".xlsx")
