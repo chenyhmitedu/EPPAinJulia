@@ -28,23 +28,20 @@ function _eppacore(B, simu::Integer = 0)
     g = B.g
     ge = B.ge
 
-    ac_group(g) = g in I || g in TECH ? :industry : g == :households ? :households : :htrn
     ftotco20 = Dict(r => sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) for r in R)
 
     # cperv: the benchmark carbon intensity of fuel e in region r, in MtCO2 per 10 billion USD of that fuel
     cperv = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in R, e in SCO2_ENERGY
-        emis = sum(B.sco20[(e, u, r)] for u in SCO2_SECTORS)
-        val = sum(B.pac0[(e, g, r)] for g in AC_SECTORS)
-        rate = val == 0 ? 0.0 : emis / val
-        for g in AC_SECTORS
-            cperv[(e, g, r)] = rate
+        for g in EJUSE_SECTORS
+            val_g = B.pac0[(e, g, r)]
+            cperv[(e, g, r)] = val_g == 0 ? 0.0 : B.sco20[(e, g, r)] / val_g
         end
     end
 
     # csale: the highest benchmark carbon intensity in r, MtCO2 per 10 billion USD. It is a scaling constant.
     cscale = Dict(r => begin
-        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in AC_SECTORS)
+        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in EJUSE_SECTORS)
         m > 0 ? m : 1.0
     end for r in R)
 
@@ -52,8 +49,8 @@ function _eppacore(B, simu::Integer = 0)
         k0[r=R], B.kapital[r],                                  (description = "Endowment: capital")
         l0[r=R], B.labor[r],                                    (description = "Endowment: labor")
         ff0[i=I, r=R], B.ffact[(r, i)],                         (description = "Endowment: fixed factor and land in agri")
-        ffe[i_=TECH_NHR, r=R], B.ffact_e[(i_, r)],               (description = "Endowment: fixed factor for nele, hele and rele")
-        sav[r=R], B.sav0[r],                             (description = "Endowment: negative base-year trade balance")
+        ffe[i_=TECH_NHR, r=R], B.ffact_e[(i_, r)],              (description = "Endowment: fixed factor for nele, hele and rele")
+        sav[r=R], B.sav0[r],                                    (description = "Endowment: negative base-year trade balance")
         grg[r=R], B.g0[r],                                      (description = "Base-year government expenditure")
         gdp0[r=R], B.rgdp0[r],                                  (description = "Base-year GDP")
         gp0[r=R], 1.0,                                          (description = "Calibrated productivity target")
@@ -100,7 +97,7 @@ function _eppacore(B, simu::Integer = 0)
     @sectors(MGE, begin
         D[i=I, r=R],                                            (description = "Activity level for domestic production")
         DE[i=TECH ∪ [:elec], r=R],                              (description = "Activity level for power subsector and some aggregation")
-        AC[e=ENERGY, g=AC_SECTORS, r=R],                        (description = "Activity level for combusted energy transformation by user group")
+        AC[e=ENERGY, g=EJUSE_SECTORS, r=R],                     (description = "Activity level for combusted energy transformation by user")
         GOVT[r=R],                                              (description = "Activity level for aggregated government consumption")                                      
         INV[r=R],                                               (description = "Activity level for investment")                                      
         YT,                                                     (description = "Activity level for international transport")                              
@@ -123,14 +120,14 @@ function _eppacore(B, simu::Integer = 0)
         SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=R],               (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
         FTOTCO2[r=R],                                           (lower_bound = 0, start = ftotco20[r], description = "Total combusted CO2 by region in MtCO2")
         CP[r=R],                                                (lower_bound = 0, start = 0, description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r")
-        CT[e=SCO2_ENERGY, g=AC_SECTORS, r=R],                   (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user group and region")
+        CT[e=SCO2_ENERGY, g=EJUSE_SECTORS, r=R],                (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user and region")
     end)
 
     @consumers(MGE, begin
         RA[r=R],                                                (description = "Representative agent")
     end)
 
-    for r in R, g in AC_SECTORS
+    for r in R, g in EJUSE_SECTORS
         @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
             @output(PAC[:oil, r],      B.pac0[(:oil, g, r)],    t)
             @input(PHOM[r],            B.pac0[(:oil, g, r)],    s)
@@ -418,7 +415,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for r in R, g in EJUSE_SECTORS, e in ENERGY
-        expr = B.ejuse_over_euse[(e, g, r)] * B.euse0[(e, g, r)] * AC[e, ac_group(g), r]
+        expr = B.ejuse_over_euse[(e, g, r)] * B.euse0[(e, g, r)] * AC[e, g, r]
         @aux_constraint(MGE, EE[e, g, r], EE[e, g, r] - expr)
     end
 
@@ -434,7 +431,7 @@ function _eppacore(B, simu::Integer = 0)
         @aux_constraint(MGE, CP[r], 
             (co2cap[r] - FTOTCO2[r]) / max(ftotco20[r], 1.0))
 
-        for e in SCO2_ENERGY, g in AC_SECTORS
+        for e in SCO2_ENERGY, g in EJUSE_SECTORS
             # the ratio cperv / cscale has no unit; CP is the tax rate on the most carbon-intensive fuel
             @aux_constraint(MGE, CT[e, g, r], 
                 CT[e, g, r] - CP[r] * (cperv[(e, g, r)] / cscale[r]))
@@ -482,4 +479,3 @@ function _eppacore(B, simu::Integer = 0)
     end
     return MGE, state
 end
-

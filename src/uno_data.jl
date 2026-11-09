@@ -399,13 +399,13 @@ function prepare(source)
     end
 
     for r in REGIONS, e in ENERGY
-        industry = 0.0
         for g in SECTORS
             g == :elec && continue
-            industry += e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
+            pac0[(e, g, r)] = e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
         end
-        industry += e == :roil ? sum(elecin[(t, :roil, r)] * cr(:roil, :elec, r) for t in TECH) : sum(elecin[(t, e, r)] for t in TECH)
-        pac0[(e, :industry, r)] = industry
+        for t in TECH
+            pac0[(e, t, r)] = e == :roil ? elecin[(t, :roil, r)] * cr(:roil, :elec, r) : elecin[(t, e, r)]
+        end
         pac0[(e, :households, r)] = e == :roil ? ence1[(e, r)] * cr(:roil, :final, r) : ence1[(e, r)]
         pac0[(e, :htrn, r)] = e == :roil ? tfo[r] * cr(:roil, :final, r) : 0.0
     end
