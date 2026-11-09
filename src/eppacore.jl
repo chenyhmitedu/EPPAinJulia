@@ -124,7 +124,7 @@ function _eppacore(B, simu::Integer = 0)
     end)
 
     @sectors(MGE, begin
-        D[i=y_d],                                               (description = "Activity level for domestic production")
+        D[i=I, r=R],                                            (description = "Activity level for domestic production")
         DE[i=y_de],                                             (description = "Activity level for power subsector and some aggregation")
         AC[e=ENERGY, g=AC_SECTORS, r=R],                        (description = "Activity level for combusted energy transformation by user group")
         GOVT[r=R],                                              (description = "Activity level for aggregated government consumption")                                      
@@ -174,7 +174,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i, r) in y_na
-        @production(MGE, D[(:na, i, r)], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, D[i, r], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PDB[:food, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.ti(j, i, r)) for j in NE]...
@@ -191,7 +191,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i, r) in y_ei
-        @production(MGE, D[(:ei, i, r)], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, D[i, r], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PDB[:eint, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.ti(j, i, r)) for j in NE]...
@@ -208,7 +208,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i, r) in y_ag
-        @production(MGE, D[(:ag, i, r)], [t=0, s=get(B.sigu, (i, r), 0.0), a=>s=0.7, va=>a=B.elas(i, :l_k, r), fx=>a=get(B.esup, (i, r), 0.0), e=>fx=B.elas(i, :e_kl, r), ne=>e=0, en=>e=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, D[i, r], [t=0, s=get(B.sigu, (i, r), 0.0), a=>s=0.7, va=>a=B.elas(i, :l_k, r), fx=>a=get(B.esup, (i, r), 0.0), e=>fx=B.elas(i, :e_kl, r), ne=>e=0, en=>e=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  ne,   taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.ti(j, i, r)) for j in NE]...
             [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],    ne,   taxes=[Tax(RA[r], ti[:roil, i, r])],  reference_price=1 + B.ti(:roil, i, r))]...
@@ -224,7 +224,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for (i, r) in y_en
-        @production(MGE, D[(:en, i, r)], [t=0, s=0, b=>s=get(B.esup, (i, r), 0.0), a=>b=0, va=>a=B.elas(i, :l_k, r), en=>a=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
+        @production(MGE, D[i, r], [t=0, s=0, b=>s=get(B.esup, (i, r), 0.0), a=>b=0, va=>a=B.elas(i, :l_k, r), en=>a=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PHOM[r],           B.xp0_phom[(r, i)],                t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.ti(j, i, r)) for j in NE]...
@@ -241,7 +241,7 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for r in y_el
-        @production(MGE, D[(:el, :elec, r)], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
+        @production(MGE, D[:elec, r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
             @output(PD[:elec, r],      B.xp0[(r, :elec)],   t)
             [@input(PDE[:sele, r],     B.sele0[r],          s001)]...
             [@input(PDE[:dispgen, r],  B.dispgen0[r],       s011)]...
