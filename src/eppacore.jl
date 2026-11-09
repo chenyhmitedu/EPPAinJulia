@@ -27,18 +27,7 @@ function _eppacore(B, simu::Integer = 0)
     I = SECTORS
     g = B.g
     ge = B.ge
-    y_na = [(i, r) for i in NOT_AENOE for r in R if g("xp0", (r, i)) > 0]
-    y_ei = [(i, r) for i in [:eint] for r in R if g("xp0", (r, i)) > 0]
-    y_ag = [(i, r) for i in AGRI for r in R if g("xp0", (r, i)) > 0]
-    y_en = [(i, r) for i in ENOE for r in R if g("xp0", (r, i)) > 0]
-    y_el = [r for r in R if g("xp0", (r, :elec)) > 0]
-    y_d = vcat(
-        [(:na, i, r) for (i, r) in y_na],
-        [(:ei, i, r) for (i, r) in y_ei],
-        [(:ag, i, r) for (i, r) in y_ag],
-        [(:en, i, r) for (i, r) in y_en],
-        [(:el, :elec, r) for r in y_el],
-    )
+
     y_f = [(i_, r) for i_ in TECH_F for r in R if ge("xp0_", (i_, r)) > 0]
     y_nhr = [(i_, r) for i_ in TECH_NHR for r in R if ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0]
     y_n = [(i_, r) for i_ in TECH_N for r in R if ge("xp0_", (i_, r)) > 0]
@@ -173,7 +162,8 @@ function _eppacore(B, simu::Integer = 0)
         end
     end
 
-    for (i, r) in y_na
+    for i in NOT_AENOE, r in R
+        g("xp0", (r, i)) > 0 || continue
         @production(MGE, D[i, r], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PDB[:food, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
@@ -190,7 +180,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i, r) in y_ei
+    for i in [:eint], r in R
+        g("xp0", (r, i)) > 0 || continue
         @production(MGE, D[i, r], [t=2, s=get(B.sigu, (i, r), 0.0), b=>s=get(B.esup, (i, r), 0.0), a=>b=0, ee=>a=B.elas(i, :e_kl, r), va=>ee=B.elas(i, :l_k, r), en=>ee=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PDB[:eint, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
@@ -207,7 +198,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i, r) in y_ag
+    for i in AGRI, r in R
+        g("xp0", (r, i)) > 0 || continue
         @production(MGE, D[i, r], [t=0, s=get(B.sigu, (i, r), 0.0), a=>s=0.7, va=>a=B.elas(i, :l_k, r), fx=>a=get(B.esup, (i, r), 0.0), e=>fx=B.elas(i, :e_kl, r), ne=>e=0, en=>e=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  ne,   taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.ti(j, i, r)) for j in NE]...
@@ -223,7 +215,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i, r) in y_en
+    for i in ENOE, r in R
+        g("xp0", (r, i)) > 0 || continue
         @production(MGE, D[i, r], [t=0, s=0, b=>s=get(B.esup, (i, r), 0.0), a=>b=0, va=>a=B.elas(i, :l_k, r), en=>a=B.elas(i, :noe_el, r), en1=>en=get(B.esube, (i, r), 0.0), oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
             @output(PHOM[r],           B.xp0_phom[(r, i)],                t,    taxes=[Tax(RA[r], td[i, r])])
             @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
@@ -240,7 +233,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for r in y_el
+    for r in R
+        g("xp0", (r, :elec)) > 0 || continue
         @production(MGE, D[:elec, r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
             @output(PD[:elec, r],      B.xp0[(r, :elec)],   t)
             [@input(PDE[:sele, r],     B.sele0[r],          s001)]...
@@ -254,7 +248,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i_, r) in y_f
+    for i_ in TECH_F, r in R
+        ge("xp0_", (i_, r)) > 0 || continue
         @production(MGE, DE[(:f, i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
@@ -270,7 +265,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i_, r) in y_nhr
+    for i_ in TECH_NHR, r in R
+    ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0 || continue
         @production(MGE, DE[(:nhr, i_, r)], [t=0, s=0, bc=>s=B.nhrsigma[(i_, r)], ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[:dispgen, r],  B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
@@ -286,7 +282,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i_, r) in y_n
+    for i_ in TECH_N, r in R
+        ge("xp0_", (i_, r)) > 0 || continue
         @production(MGE, DE[(:n, i_, r)], [t=0, s=0, s001=>s=get(B.wst, (i_, r), 0.0), ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
@@ -301,7 +298,8 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i_, r) in y_tech
+    for i_ in [:tele], r in R
+        ge("xp0_", (i_, r)) > 0 || continue
         @production(MGE, DE[(:tech, i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[:tnd, r],      B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
