@@ -228,14 +228,14 @@ function prepare(source)
         end
     end
 
-    armqout = Dict{Tuple{Symbol,Symbol},Float64}()
-    armqdom = Dict{Tuple{Symbol,Symbol},Float64}()
+    xat0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    xd0 = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS, i in SECTORS
-        armqout[(r, i)] = a0[(r, i)]
-        armqdom[(r, i)] = d0[(r, i)]
+        xat0[(r, i)] = a0[(r, i)]
+        xd0[(r, i)] = d0[(r, i)]
         if (i == :food && r != :bra) || (i == :eint && r == :bra)
-            armqout[(r, i)] -= tbo[r]
-            armqdom[(r, i)] -= tbo[r]
+            xat0[(r, i)] -= tbo[r]
+            xd0[(r, i)] -= tbo[r]
         end
         for rr in REGIONS
             mvtwr[(r, rr, i)] = sum(g("vtwr", (j, i, rr, r)) for j in SECTORS)
@@ -503,7 +503,7 @@ function prepare(source)
         elas, esup, esube, sigu, delas, cr, wst,
         ti, tf, tg, tp, tx, tm, pc0, pg0,
         a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
-        xdc, xmc, xm0, wtflow, mvtwr, armqout, armqdom,
+        xdc, xmc, xm0, wtflow, mvtwr, xat0, xd0,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
         elecin, elecint, ffact_e, nhrsigma, sele0, dispgen0, wele0, tele0, efout0, xp0_, eprod__over_xp0_, eprod_over_xp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,

@@ -371,8 +371,8 @@ function _eppacore(B, simu::Integer = 0)
     for i in I, r in R
         (i != :oil && B.a0[(r, i)] != 0) || continue
         @production(MGE, A[i, r], [t=0, s=B.elas(i, :sdm, r)], begin
-            @output(PA[i, r],          B.armqout[(r, i)],                               t)
-            @input(PD[i, r],           B.armqdom[(r, i)],                               s)
+            @output(PA[i, r],          B.xat0[r, i],                                    t)
+            @input(PD[i, r],           B.xd0[(r, i)],                                   s)
             @input(PM[i, r],           B.xm0[(r, i)],                                   s)
         end)
     end
