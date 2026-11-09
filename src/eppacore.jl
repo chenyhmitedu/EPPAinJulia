@@ -28,21 +28,6 @@ function _eppacore(B, simu::Integer = 0)
     g = B.g
     ge = B.ge
 
-    y_f = [(i_, r) for i_ in TECH_F for r in R if ge("xp0_", (i_, r)) > 0]
-    y_nhr = [(i_, r) for i_ in TECH_NHR for r in R if ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0]
-    y_n = [(i_, r) for i_ in TECH_N for r in R if ge("xp0_", (i_, r)) > 0]
-    y_tech = [(i_, r) for i_ in [:tele] for r in R if ge("xp0_", (i_, r)) > 0]
-    y_de = vcat(
-        [(:ef, :elec, r) for r in R],
-        [(:f, i_, r) for (i_, r) in y_f],
-        [(:nhr, i_, r) for (i_, r) in y_nhr],
-        [(:n, i_, r) for (i_, r) in y_n],
-        [(:tech, i_, r) for (i_, r) in y_tech],
-    )
-    y_arm = [(i, r) for i in I if i != :oil for r in R if B.a0[(r, i)] != 0]
-    y_m = [(i, r) for i in I if i != :oil for r in R if g("xm0", (r, i)) > 0]
-    y_hm = [r for r in R if B.homm0[r] > 0]
-    y_hx = [r for r in R if B.homx0[r] > 0]
     ac_group(g) = g in I || g in TECH ? :industry : g == :households ? :households : :htrn
     ftotco20 = Dict(r => sum(B.sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) for r in R)
 
@@ -114,7 +99,7 @@ function _eppacore(B, simu::Integer = 0)
 
     @sectors(MGE, begin
         D[i=I, r=R],                                            (description = "Activity level for domestic production")
-        DE[i=y_de],                                             (description = "Activity level for power subsector and some aggregation")
+        DE[i=TECH ∪ [:elec], r=R],                              (description = "Activity level for power subsector and some aggregation")
         AC[e=ENERGY, g=AC_SECTORS, r=R],                        (description = "Activity level for combusted energy transformation by user group")
         GOVT[r=R],                                              (description = "Activity level for aggregated government consumption")                                      
         INV[r=R],                                               (description = "Activity level for investment")                                      
@@ -125,10 +110,10 @@ function _eppacore(B, simu::Integer = 0)
         HAGG[r=R],                                              (description = "Activity level for household transport: conventional")                                      
         Z[r=R],                                                 (description = "Activity level for consumption index")                                  
         W[r=R],                                                 (description = "Activity level for welfare: consumption & savings")                                  
-        A[i=y_arm],                                             (description = "Activity level for Arminton goods")                                      
-        M[i=y_m],                                               (description = "Activity level for imports")
-        HOMM[r=y_hm],                                           (description = "Activity level for net import of homogeneous good")                                          
-        HOMX[r=y_hx],                                           (description = "Activity level for net export of homogeneous good")
+        A[i=I, r=R],                                            (description = "Activity level for Arminton goods")                                      
+        M[i=I, r=R],                                            (description = "Activity level for imports")
+        HOMM[r=R],                                              (description = "Activity level for net import of homogeneous good")                                          
+        HOMX[r=R],                                              (description = "Activity level for net export of homogeneous good")
     end)
 
     @auxiliaries(MGE, begin
@@ -242,7 +227,7 @@ function _eppacore(B, simu::Integer = 0)
             [@input(PDE[:wele, r],     B.wele0[r],          s011)]...
             [@input(PDE[:tnd, r],      B.tele0[r],          s)]...
         end)
-        @production(MGE, DE[(:ef, :elec, r)], [t=0, s=1.5], begin
+        @production(MGE, DE[:elec, r], [t=0, s=1.5], begin
             @output(PDE[:dispgen, r],  B.efout0[r],        t)
             [@input(PDE[i_, r],        B.xp0_[(i_, r)],    s) for i_ in TECH_F]...
         end)
@@ -250,7 +235,7 @@ function _eppacore(B, simu::Integer = 0)
 
     for i_ in TECH_F, r in R
         ge("xp0_", (i_, r)) > 0 || continue
-        @production(MGE, DE[(:f, i_, r)], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+        @production(MGE, DE[i_, r], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
@@ -267,7 +252,7 @@ function _eppacore(B, simu::Integer = 0)
 
     for i_ in TECH_NHR, r in R
     ge("xp0_", (i_, r)) > 0 && get(B.ffact_e, (i_, r), 0.0) > 0 || continue
-        @production(MGE, DE[(:nhr, i_, r)], [t=0, s=0, bc=>s=B.nhrsigma[(i_, r)], ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+        @production(MGE, DE[i_, r], [t=0, s=0, bc=>s=B.nhrsigma[(i_, r)], ac=>bc=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[:dispgen, r],  B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
@@ -284,7 +269,7 @@ function _eppacore(B, simu::Integer = 0)
 
     for i_ in TECH_N, r in R
         ge("xp0_", (i_, r)) > 0 || continue
-        @production(MGE, DE[(:n, i_, r)], [t=0, s=0, s001=>s=get(B.wst, (i_, r), 0.0), ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+        @production(MGE, DE[i_, r], [t=0, s=0, s001=>s=get(B.wst, (i_, r), 0.0), ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
@@ -300,7 +285,7 @@ function _eppacore(B, simu::Integer = 0)
 
     for i_ in [:tele], r in R
         ge("xp0_", (i_, r)) > 0 || continue
-        @production(MGE, DE[(:tech, i_, r)], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
+        @production(MGE, DE[i_, r], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=B.elas(:elec, :e_kl, r), curb=>eec=0, vac=>eec=B.elas(:elec, :l_k, r)], begin
             @output(PDE[:tnd, r],      B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
@@ -383,30 +368,35 @@ function _eppacore(B, simu::Integer = 0)
         end)
     end
 
-    for (i, r) in y_arm
-        @production(MGE, A[(i, r)], [t=0, s=B.elas(i, :sdm, r)], begin
+    for i in I, r in R
+        (i != :oil && B.a0[(r, i)] != 0) || continue
+        @production(MGE, A[i, r], [t=0, s=B.elas(i, :sdm, r)], begin
             @output(PA[i, r],          B.armqout[(r, i)],                               t)
             @input(PD[i, r],           B.armqdom[(r, i)],                               s)
             @input(PM[i, r],           B.xm0[(r, i)],                                   s)
         end)
     end
 
-    for (i, r) in y_m
-        @production(MGE, M[(i, r)], [t=0, s=B.elas(i, :smm, r), src[rr=R]=>s=0], begin
+    for i in I, r in R
+        (i != :oil && g("xm0", (r, i)) > 0) || continue
+        @production(MGE, M[i, r], [t=0, s=B.elas(i, :smm, r), src[rr=R]=>s=0], begin
             @output(PM[i, r],          B.xm0[(r, i)],                                   t)
             [@input(PD[i, rr],         B.wtflow[(r, rr, i)],                            src[rr],        taxes=[Tax(RA[rr], tx[i, rr, r]), Tax(RA[r], tm[i, rr, r] * (1 + tx[i, rr, r]))], reference_price=(1 + B.tx(i, rr, r)) * (1 + B.tm(i, rr, r))) for rr in R]...
             [@input(PT,                B.mvtwr[(r, rr, i)],                             src[rr],        taxes=[Tax(RA[r], tm[i, rr, r])],                                   reference_price=1 + B.tm(i, rr, r)) for rr in R]...
         end)
     end
 
-    for r in y_hm
+    for r in R
+        B.homm0[r] > 0 || continue
         @production(MGE, HOMM[r], [t=0, s=0], begin
             @output(PHOM[r],           B.vhomm0[r],                                     t)
             @input(PWH,                B.homm0[r],                                        s,              taxes=[Tax(RA[r], tmhom[r])])
             @input(PT,                 B.homt0[r],                                      s,              taxes=[Tax(RA[r], tmhom[r])])
         end)
     end
-    for r in y_hx
+
+    for r in R
+        B.homx0[r] > 0 || continue
         @production(MGE, HOMX[r], [t=0, s=0], begin
             @output(PWH,               B.homx0[r],                                      t)
             @input(PHOM[r],            B.vhomx0[r],                                     s,              taxes=[Tax(RA[r], txhom[r])])
