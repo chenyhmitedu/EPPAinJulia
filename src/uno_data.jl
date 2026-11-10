@@ -489,6 +489,43 @@ function prepare(source)
         sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
         sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
     end
+
+    for j in SECTORS, i in SECTORS, r in REGIONS
+        p["ti"][(j, i, r)] = get(p["ti"], (j, i, r), 0.0)
+    end
+    for f in [:lab, :cap], i in SECTORS, r in REGIONS
+        p["tf"][(f, i, r)] = get(p["tf"], (f, i, r), 0.0)
+    end
+    for i in SECTORS, r in REGIONS
+        p["tg"][(i, r)] = get(p["tg"], (i, r), 0.0)
+        p["tp"][(i, r)] = get(p["tp"], (i, r), 0.0)
+        p["pc0"][(i, r)] = get(p["pc0"], (i, r), 0.0)
+        p["pg0"][(i, r)] = get(p["pg0"], (i, r), 0.0)
+        sigu[(i, r)] = get(sigu, (i, r), 0.0)
+        esup[(i, r)] = get(esup, (i, r), 0.0)
+        esube[(i, r)] = get(esube, (i, r), 0.0)
+        selas[(i, :e_kl, r)] = get(selas, (i, :e_kl, r), 0.0)
+        selas[(i, :l_k, r)] = get(selas, (i, :l_k, r), 0.0)
+        selas[(i, :noe_el, r)] = get(selas, (i, :noe_el, r), 0.0)
+        selas[(i, :sdm, r)] = get(selas, (i, :sdm, r), 0.0)
+        selas[(i, :smm, r)] = get(selas, (i, :smm, r), 0.0)
+    end
+    for i in SECTORS, s in REGIONS, d in REGIONS
+        p["tx"][(i, s, d)] = get(p["tx"], (i, s, d), 0.0)
+        p["tm"][(i, s, d)] = get(p["tm"], (i, s, d), 0.0)
+    end
+    for r in REGIONS
+        delas[(r,)] = get(delas, (r,), 0.0)
+        selas[(:elec, :e_kl, r)] = get(selas, (:elec, :e_kl, r), 0.0)
+        selas[(:elec, :l_k, r)] = get(selas, (:elec, :l_k, r), 0.0)
+        selas[(:hh, :noe_el, r)] = get(selas, (:hh, :noe_el, r), 0.0)
+        for t in TECH
+            elec["td_"][(r, t)] = get(elec["td_"], (r, t), 0.0)
+        end
+        for t in TECH_N
+            wst[(t, r)] = get(wst, (t, r), 0.0)
+        end
+    end
     return (;
         p, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
         selas, esup, esube, sigu, delas, cr, wst,
@@ -547,6 +584,7 @@ function replication_error(calib_path, sim_path)
     end
     return dprod, dgdp, dtarget
 end
+
 
 
 
