@@ -18,6 +18,7 @@ const SCO2_ENERGY = [:coal, :gas, :roil]
 const SCO2_SECTORS = [filter(!=(:elec), SECTORS)..., TECH..., :households, :htrn]
 const PDE_DIM = [:dispgen, TECH_F..., TECH_N..., :tnd]
 const NOT_AENOE = [:food, :othr, :serv, :tran, :dwe]
+const LCR = [:lab, :cap, :res]
 
 const HTRNS = 0.3753
 const PROPFRAC = 0.2
