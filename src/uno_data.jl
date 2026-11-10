@@ -48,9 +48,7 @@ function prepare(source)
     println("periods ", join(YEARS, " "))
     p = raw.p
     xa0 = p["xa0"]
-    e = raw.e
-    g = raw.g
-    ge = raw.ge
+    elec = raw.e
     selas = raw.selas
     esup = raw.esup
     esube = raw.esube
@@ -68,8 +66,6 @@ function prepare(source)
     ann = raw.ann
     pop = raw.pop
     aeeigr_raw = raw.aeeigr_raw
-
-    elas(g, layer, r) = get(selas, (g, layer, r), 0.0)
     function cr(i, g, r)
         i == :roil || return 1.0
         val = get(crtable, (g, r), 0.0)
@@ -102,7 +98,7 @@ function prepare(source)
     xaroila = Dict{Tuple{Symbol,Symbol},Float64}()
     xaroilc = Dict{Tuple{Symbol,Symbol},Float64}()
     for r in REGIONS, i in SECTORS
-        ffact[(r, i)] = g("ffactd0", (r, i)) * (1 + g("tf", (:lnd, i, r)))
+        ffact[(r, i)] = get(p["ffactd0"], (r, i), 0.0) * (1 + get(p["tf"], (:lnd, i, r), 0.0))
         ffend0[(r, i)] = i in FF ? ffact[(r, i)] : 0.0
         ffgprod0[(r, i)] = i in FF ? 0.0 : ffact[(r, i)]
     end
@@ -113,6 +109,7 @@ function prepare(source)
     xp0_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
     xp0_phom = Dict{Tuple{Symbol,Symbol},Float64}()
     td = Dict{Tuple{Symbol,Symbol},Float64}()
+    td_ = Dict{Tuple{Symbol,Symbol},Float64}()
     cons0 = Dict{Symbol,Float64}()
     inv0 = Dict{Symbol,Float64}()
     g0 = Dict{Symbol,Float64}()
@@ -124,19 +121,19 @@ function prepare(source)
     trnvst0 = Dict{Symbol,Float64}()
     ytout0 = 0.0
     for r in REGIONS
-        cons0[r] = g("cons0", (r,))
-        inv0[r] = sum(g("xdi0", (r, i)) + g("xmi0", (r, i)) for i in SECTORS)
+        cons0[r] = get(p["cons0"], (r,), 0.0)
+        inv0[r] = sum(get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0) for i in SECTORS)
         pwdem0[r] = cons0[r] + inv0[r]
-        govoil0[r] = g("xdg0", (r, :oil)) + g("xmg0", (r, :oil))
-        invoil0[r] = g("xdi0", (r, :oil)) + g("xmi0", (r, :oil))
-        trnvst0[r] = g("vst", (:tran, r))
+        govoil0[r] = get(p["xdg0"], (r, :oil), 0.0) + get(p["xmg0"], (r, :oil), 0.0)
+        invoil0[r] = get(p["xdi0"], (r, :oil), 0.0) + get(p["xmi0"], (r, :oil), 0.0)
+        trnvst0[r] = get(p["vst"], (:tran, r), 0.0)
         ytout0 += trnvst0[r]
-        g0[r] = g("kapdg0", (r,)) + g("labdg0", (r,)) + g("trg0", (r,)) +
-                sum(g("xdg0", (r, i)) + g("xmg0", (r, i)) for i in SECTORS)
+        g0[r] = get(p["kapdg0"], (r,), 0.0) + get(p["labdg0"], (r,), 0.0) + get(p["trg0"], (r,), 0.0) +
+                sum(get(p["xdg0"], (r, i), 0.0) + get(p["xmg0"], (r, i), 0.0) for i in SECTORS)
         for i in SECTORS
-            a0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) + g("xm0", (r, i)) - g("vst", (i, r))
-            d0[(r, i)] = g("xp0", (r, i)) - g("es0", (r, i)) - g("vst", (i, r))
-            xp = g("xp0", (r, i))
+            a0[(r, i)] = get(p["xp0"], (r, i), 0.0) - get(p["es0"], (r, i), 0.0) + get(p["xm0"], (r, i), 0.0) - get(p["vst"], (i, r), 0.0)
+            d0[(r, i)] = get(p["xp0"], (r, i), 0.0) - get(p["es0"], (r, i), 0.0) - get(p["vst"], (i, r), 0.0)
+            xp = get(p["xp0"], (r, i), 0.0)
             xp0[(r, i)] = xp
             xp0_pdb[(r, i)] = 0.0
             xp0_phom[(r, i)] = 0.0
@@ -144,9 +141,9 @@ function prepare(source)
                 xp0[(r, i)] = 0.0
                 xp0_phom[(r, i)] = xp
             end
-            td[(r, i)] = xp == 0 ? 0.0 : g("ptxy0", (r, i)) / xp
-            govdem0[(r, i)] = i == :oil ? 0.0 : g("xdg0", (r, i)) + g("xmg0", (r, i))
-            invdem0[(r, i)] = i == :oil ? 0.0 : g("xdi0", (r, i)) + g("xmi0", (r, i))
+            td[(r, i)] = xp == 0 ? 0.0 : get(p["ptxy0"], (r, i), 0.0) / xp
+            govdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdg0"], (r, i), 0.0) + get(p["xmg0"], (r, i), 0.0)
+            invdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0)
             labd0[(r, i)] = get(labd0, (r, i), 0.0)
             kapd0[(r, i)] = get(kapd0, (r, i), 0.0)
             xaroil = get(xa0, (r, :roil, i), 0.0)
@@ -156,6 +153,10 @@ function prepare(source)
                 xa0[(r, j, i)] = get(xa0, (r, j, i), 0.0)
             end
         end
+    end
+
+    for r in REGIONS, t in TECH
+        td_[(r, t)] = get(elec["td_"], (r, t), 0.0)
     end
     xm0 = Dict(k => v for (k, v) in p["xm0"])
     wtflow = Dict(k => v for (k, v) in p["wtflow0"])
@@ -182,33 +183,33 @@ function prepare(source)
     ence1 = Dict{Tuple{Symbol,Symbol},Float64}()
     pac0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS
-        purtrn[r] = g("xdc0", (r, :tran)) + g("xmc0", (r, :tran))
+        purtrn[r] = get(p["xdc0"], (r, :tran), 0.0) + get(p["xmc0"], (r, :tran), 0.0)
         xdc[(r, :tran)] = 0.0
         xmc[(r, :tran)] = 0.0
-        ence0 = g("xdc0", (r, :roil)) + g("xmc0", (r, :roil))
-        efd = g("efd", (:roil, r))
+        ence0 = get(p["xdc0"], (r, :roil), 0.0) + get(p["xmc0"], (r, :roil), 0.0)
+        efd = get(p["efd"], (:roil, r), 0.0)
         pbio = efd == 0 ? 0.0 : ence0 / efd
         ebio = pbio * get(bio, (r, Symbol("bio-fg")), 0.0)
-        pcR = g("pc0", (:roil, r))
+        pcR = get(p["pc0"], (:roil, r), 0.0)
         tbo[r] = pcR == 0 ? 0.0 : ebio / pcR
         tfo[r] = os[r] * ence0
         toi[r] = mvh[r]
-        owntrn = esh[r] * g("cons0", (r,))
+        owntrn = esh[r] * get(p["cons0"], (r,), 0.0)
         foodp = r == :bra ? :eint : :food
-        tottrn[r] = purtrn[r] * g("pc0", (:tran, r)) + owntrn + (pcR - g("pc0", (foodp, r))) * tbo[r]
-        tse[r] = (owntrn - tfo[r] * pcR - toi[r] * g("pc0", (:othr, r)) - tbo[r] * g("pc0", (foodp, r))) / g("pc0", (:serv, r))
-        own[r] = pcR * (tfo[r] + tbo[r]) + g("pc0", (:othr, r)) * toi[r] + g("pc0", (:serv, r)) * tse[r]
-        hhwedge[r] = (pcR - g("pc0", (foodp, r))) * tbo[r]
-        xdc[(r, :roil)] = g("xdc0", (r, :roil)) - tfo[r]
-        xdc[(r, foodp)] = g("xdc0", (r, foodp)) - tbo[r]
-        xdc[(r, :othr)] = g("xdc0", (r, :othr)) - toi[r]
-        xdc[(r, :serv)] = g("xdc0", (r, :serv)) - tse[r]
+        tottrn[r] = purtrn[r] * get(p["pc0"], (:tran, r), 0.0) + owntrn + (pcR - get(p["pc0"], (foodp, r), 0.0)) * tbo[r]
+        tse[r] = (owntrn - tfo[r] * pcR - toi[r] * get(p["pc0"], (:othr, r), 0.0) - tbo[r] * get(p["pc0"], (foodp, r), 0.0)) / get(p["pc0"], (:serv, r), 0.0)
+        own[r] = pcR * (tfo[r] + tbo[r]) + get(p["pc0"], (:othr, r), 0.0) * toi[r] + get(p["pc0"], (:serv, r), 0.0) * tse[r]
+        hhwedge[r] = (pcR - get(p["pc0"], (foodp, r), 0.0)) * tbo[r]
+        xdc[(r, :roil)] = get(p["xdc0"], (r, :roil), 0.0) - tfo[r]
+        xdc[(r, foodp)] = get(p["xdc0"], (r, foodp), 0.0) - tbo[r]
+        xdc[(r, :othr)] = get(p["xdc0"], (r, :othr), 0.0) - toi[r]
+        xdc[(r, :serv)] = get(p["xdc0"], (r, :serv), 0.0) - tse[r]
         for i in NENDT
             xh[(i, r)] = max(get(xdc, (r, i), 0.0) + get(xmc, (r, i), 0.0), 0.0)
         end
         xh[(:dwe, r)] = max(get(xdc, (r, :dwe), 0.0) + get(xmc, (r, :dwe), 0.0), 0.0)
         for i in ENERGY
-            ence[(i, r)] = g("xdc0", (r, i)) + g("xmc0", (r, i))
+            ence[(i, r)] = get(p["xdc0"], (r, i), 0.0) + get(p["xmc0"], (r, i), 0.0)
         end
         ence[(:roil, r)] -= tfo[r]
         for i in ENERGY
@@ -237,7 +238,7 @@ function prepare(source)
             xd0[(r, i)] -= tbo[r]
         end
         for rr in REGIONS
-            mvtwr[(r, rr, i)] = sum(g("vtwr", (j, i, rr, r)) for j in SECTORS)
+            mvtwr[(r, rr, i)] = sum(get(p["vtwr"], (j, i, rr, r), 0.0) for j in SECTORS)
         end
     end
 
@@ -252,26 +253,26 @@ function prepare(source)
     homadj = Dict{Symbol,Float64}()
     trnadj = Dict{Symbol,Float64}()
     for r in REGIONS
-        imp = sum(g("wtflow0", (r, rr, :oil)) * (1 + g("tx", (:oil, rr, r))) for rr in REGIONS)
-        exp = sum(g("wtflow0", (rr, r, :oil)) * (1 + g("tx", (:oil, r, rr))) for rr in REGIONS)
+        imp = sum(get(p["wtflow0"], (r, rr, :oil), 0.0) * (1 + get(p["tx"], (:oil, rr, r), 0.0)) for rr in REGIONS)
+        exp = sum(get(p["wtflow0"], (rr, r, :oil), 0.0) * (1 + get(p["tx"], (:oil, r, rr), 0.0)) for rr in REGIONS)
         homm0[r] = max(0.0, imp - exp)
         homx0[r] = max(0.0, -imp + exp)
-        denx = sum(g("wtflow0", (rr, r, :oil)) for rr in REGIONS)
-        txhom[r] = denx == 0 ? 0.0 : sum(g("wtflow0", (rr, r, :oil)) * g("tx", (:oil, r, rr)) for rr in REGIONS) / denx
+        denx = sum(get(p["wtflow0"], (rr, r, :oil), 0.0) for rr in REGIONS)
+        txhom[r] = denx == 0 ? 0.0 : sum(get(p["wtflow0"], (rr, r, :oil), 0.0) * get(p["tx"], (:oil, r, rr), 0.0) for rr in REGIONS) / denx
         vhomx0[r] = homx0[r] == 0 ? 0.0 : homx0[r] / (1 + txhom[r])
-        denm = sum(g("wtflow0", (r, rr, :oil)) * (1 + g("tx", (:oil, rr, r))) for rr in REGIONS)
-        marg = sum(g("vtwr", (:tran, :oil, rr, r)) for rr in REGIONS)
+        denm = sum(get(p["wtflow0"], (r, rr, :oil), 0.0) * (1 + get(p["tx"], (:oil, rr, r), 0.0)) for rr in REGIONS)
+        marg = sum(get(p["vtwr"], (:tran, :oil, rr, r), 0.0) for rr in REGIONS)
         tmargin = denm == 0 ? 0.0 : marg / denm
         homt0[r] = tmargin * homm0[r]
-        den_tm = sum(g("wtflow0", (r, rr, :oil)) * (1 + g("tx", (:oil, rr, r))) + g("vtwr", (:tran, :oil, rr, r)) for rr in REGIONS)
-        tmhom[r] = den_tm == 0 ? 0.0 : sum((g("wtflow0", (r, rr, :oil)) * (1 + g("tx", (:oil, rr, r))) + g("vtwr", (:tran, :oil, rr, r))) * g("tm", (:oil, rr, r)) for rr in REGIONS) / den_tm
+        den_tm = sum(get(p["wtflow0"], (r, rr, :oil), 0.0) * (1 + get(p["tx"], (:oil, rr, r), 0.0)) + get(p["vtwr"], (:tran, :oil, rr, r), 0.0) for rr in REGIONS)
+        tmhom[r] = den_tm == 0 ? 0.0 : sum((get(p["wtflow0"], (r, rr, :oil), 0.0) * (1 + get(p["tx"], (:oil, rr, r), 0.0)) + get(p["vtwr"], (:tran, :oil, rr, r), 0.0)) * get(p["tm"], (:oil, rr, r), 0.0) for rr in REGIONS) / den_tm
         vhomm0[r] = (homm0[r] + homt0[r]) * (1 + tmhom[r])
-        homadj[r] = a0[(r, :oil)] - (g("xp0", (r, :oil)) + vhomm0[r] - vhomx0[r])
+        homadj[r] = a0[(r, :oil)] - (get(p["xp0"], (r, :oil), 0.0) + vhomm0[r] - vhomx0[r])
         trnadj[r] = homt0[r] - marg
     end
 
-    elecin = Dict(k => v for (k, v) in e["elecin"])
-    elecint = Dict(k => v for (k, v) in e["elecint"])
+    elecin = Dict(k => v for (k, v) in elec["elecin"])
+    elecint = Dict(k => v for (k, v) in elec["elecint"])
     ffact_e = Dict{Tuple{Symbol,Symbol},Float64}()
     nhrsigma = Dict{Tuple{Symbol,Symbol},Float64}()
     sele0 = Dict{Symbol,Float64}()
@@ -289,23 +290,23 @@ function prepare(source)
     ejuse = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     euse0 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     ejuse_over_euse = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
-    kapital = Dict(r => sum(g("kapd0", (r, i)) for i in SECTORS) for r in REGIONS)
-    labor = Dict(r => sum(g("labd0", (r, i)) for i in SECTORS) + g("labdg0", (r,)) for r in REGIONS)
+    kapital = Dict(r => sum(get(p["kapd0"], (r, i), 0.0) for i in SECTORS) for r in REGIONS)
+    labor = Dict(r => sum(get(p["labd0"], (r, i), 0.0) for i in SECTORS) + get(p["labdg0"], (r,), 0.0) for r in REGIONS)
     rshr = Dict(:nele => 0.15, :hele => 0.30, :rele => 0.15)
     for r in REGIONS, t in TECH_NHR
-        xp = ge("xp0_", (t, r))
-        td_ = ge("td_", (r, t))
+        xp = get(elec["xp0_"], (t, r), 0.0)
+        tdr = td_[(r, t)]
         cap0 = get(elecin, (t, :cap, r), 0.0)
         lab0 = get(elecin, (t, :lab, r), 0.0)
         tc = get(elecint, (t, :cap, r), 0.0)
         tl = get(elecint, (t, :lab, r), 0.0)
-        r0 = (1 + tc) == 0 ? 0.0 : rshr[t] * xp * (1 - td_) / (1 + tc)
+        r0 = (1 + tc) == 0 ? 0.0 : rshr[t] * xp * (1 - tdr) / (1 + tc)
         elecinmr0 = cap0 - r0
         zshr = 0.0
         opelec = 1.0
         if elecinmr0 <= 0 && (cap0 + lab0) > 0
             opelec = ((1 + tc) * cap0 + (1 + tl) * lab0) / (cap0 + lab0)
-            zshr = min(0.9, xp * (1 - td_) / opelec * rshr[t] / (cap0 + lab0))
+            zshr = min(0.9, xp * (1 - tdr) / opelec * rshr[t] / (cap0 + lab0))
         end
         if elecinmr0 > 0
             elecin[(t, :cap, r)] = cap0 - r0
@@ -325,7 +326,7 @@ function prepare(source)
             ffact_e[(t, r)] = 0.0
         end
         res = get(elecin, (t, :res, r), 0.0)
-        den = (1 - td_) * xp
+        den = (1 - tdr) * xp
         share = den == 0 ? 0.0 : res / den
         eta = get(nhreta, (t, r), 0.0)
         nhrsigma[(t, r)] = (1 - share) == 0 ? 0.0 : eta * share / (1 - share)
@@ -336,23 +337,22 @@ function prepare(source)
         elecint[(t, inp, r)] = get(elecint, (t, inp, r), 0.0)
     end
 
-    gv = g
     ejadj = Dict{Tuple{Symbol,Symbol},Float64}()
     sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
 
     for r in REGIONS, g in SECTORS, e in ENERGY
         g == :elec && continue      # && evaluates the right-hand side only if the left-hand side is true
-        ejuse0[(e, g, r)] = gv("eind", (e, g, r)) * (e == :roil ? cr(:roil, g, r) : 1.0)
-        ejuse_all0[(e, g, r)] = gv("eind", (e, g, r))
+        ejuse0[(e, g, r)] = get(p["eind"], (e, g, r), 0.0) * (e == :roil ? cr(:roil, g, r) : 1.0)
+        ejuse_all0[(e, g, r)] = get(p["eind"], (e, g, r), 0.0)
         euse0[(e, g, r)] = xa0[(r, e, g)]
         ejuse_over_euse[(e, g, r)] = 0.0
     end
 
     for r in REGIONS, e in ENERGY
-        ejuse0[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) * cr(:roil, :final, r) : gv("efd", (e, r))
-        ejuse0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) * cr(:roil, :final, r) : 0.0
-        ejuse_all0[(e, :households, r)] = e == :roil ? (1 - os[r]) * gv("efd", (:roil, r)) : gv("efd", (e, r))
-        ejuse_all0[(e, :htrn, r)] = e == :roil ? os[r] * gv("efd", (:roil, r)) : 0.0
+        ejuse0[(e, :households, r)] = e == :roil ? (1 - os[r]) * get(p["efd"], (:roil, r), 0.0) * cr(:roil, :final, r) : get(p["efd"], (e, r), 0.0)
+        ejuse0[(e, :htrn, r)] = e == :roil ? os[r] * get(p["efd"], (:roil, r), 0.0) * cr(:roil, :final, r) : 0.0
+        ejuse_all0[(e, :households, r)] = e == :roil ? (1 - os[r]) * get(p["efd"], (:roil, r), 0.0) : get(p["efd"], (e, r), 0.0)
+        ejuse_all0[(e, :htrn, r)] = e == :roil ? os[r] * get(p["efd"], (:roil, r), 0.0) : 0.0
         euse0[(e, :households, r)] = ence1[(e, r)]
         euse0[(e, :htrn, r)] = e == :roil ? tfo[r] : 0.0
         ejuse_over_euse[(e, :households, r)] = 0.0
@@ -360,9 +360,9 @@ function prepare(source)
     end
 
     for r in REGIONS, e in ENERGY
-        elec_use = gv("eind", (e, :elec, r)) * (e == :roil ? cr(:roil, :elec, r) : 1.0)
-        elec_use_all = gv("eind", (e, :elec, r))
-        fuel_in = sum(elecin[(t, e, r)] for t in TECH)
+        elec_use = get(p["eind"], (e, :elec, r), 0.0) * (e == :roil ? cr(:roil, :elec, r) : 1.0)
+        elec_use_all = get(p["eind"], (e, :elec, r), 0.0)
+        fuel_in = sum(elecin[(i_, e, r)] for i_ in TECH)
         share = fuel_in == 0 ? 0.0 : elec_use / fuel_in
         share_all = fuel_in == 0 ? 0.0 : elec_use_all / fuel_in
         for i_ in TECH
@@ -410,24 +410,24 @@ function prepare(source)
     end
 
     for r in REGIONS
-        sele0[r] = ge("xp0_", (:sele, r))
-        dispgen0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_D)
-        wele0[r] = ge("xp0_", (:wele, r))
-        tele0[r] = ge("xp0_", (:tele, r))
-        efout0[r] = sum(ge("xp0_", (i_, r)) for i_ in TECH_F)
+        sele0[r] = get(elec["xp0_"], (:sele, r), 0.0)
+        dispgen0[r] = sum(get(elec["xp0_"], (i_, r), 0.0) for i_ in TECH_D)
+        wele0[r] = get(elec["xp0_"], (:wele, r), 0.0)
+        tele0[r] = get(elec["xp0_"], (:tele, r), 0.0)
+        efout0[r] = sum(get(elec["xp0_"], (i_, r), 0.0) for i_ in TECH_F)
         for i_ in TECH
-            xp0_[(i_, r)] = ge("xp0_", (i_, r))
+            xp0_[(i_, r)] = get(elec["xp0_"], (i_, r), 0.0)
             xp = xp0_[(i_, r)]
-            eprod__over_xp0_[(i_, r)] = xp == 0 ? 0.0 : ge("eprod_", (i_, r)) / xp
+            eprod__over_xp0_[(i_, r)] = xp == 0 ? 0.0 : get(elec["eprod_"], (i_, r), 0.0) / xp
         end
-        eprod_sum = sum(ge("eprod_", (i_, r)) for i_ in TECH)
+        eprod_sum = sum(get(elec["eprod_"], (i_, r), 0.0) for i_ in TECH)
         elec_out = xp0[(r, :elec)]
         eprod_over_xp0[r] = elec_out == 0 ? 0.0 : eprod_sum / elec_out
     end
 
     rgdp0 = Dict{Symbol,Float64}()
     for r in REGIONS
-        sav0[r] = g("savf0", (r,))
+        sav0[r] = get(p["savf0"], (r,), 0.0)
         for t in TECH_NHR
             ffact_e[(t, r)] = get(ffact_e, (t, r), 0.0)
         end
@@ -438,8 +438,8 @@ function prepare(source)
         imports = 0.0
         for rr in REGIONS, i in SECTORS
             i == :oil && continue
-            exports += (1 + g("tx", (i, r, rr))) * g("wtflow0", (rr, r, i))
-            imports += (1 + g("tx", (i, rr, r))) * g("wtflow0", (r, rr, i))
+            exports += (1 + get(p["tx"], (i, r, rr), 0.0)) * get(p["wtflow0"], (rr, r, i), 0.0)
+            imports += (1 + get(p["tx"], (i, rr, r), 0.0)) * get(p["wtflow0"], (r, rr, i), 0.0)
         end
         rgdp0[r] = cons0[r] + inv0[r] + g0[r] + exports - imports + homx0[r] - homm0[r]
     end
@@ -447,21 +447,21 @@ function prepare(source)
     gap = 0.0
     for r in REGIONS, i in SECTORS
         i == :elec && continue
-        xp = g("xp0", (r, i))
+        xp = get(p["xp0"], (r, i), 0.0)
         xp == 0 && continue
         cost = ffact[(r, i)]
-        cost += g("labd0", (r, i)) * (1 + g("tf", (:lab, i, r)))
-        cost += g("kapd0", (r, i)) * (1 + g("tf", (:cap, i, r)))
+        cost += get(p["labd0"], (r, i), 0.0) * (1 + get(p["tf"], (:lab, i, r), 0.0))
+        cost += get(p["kapd0"], (r, i), 0.0) * (1 + get(p["tf"], (:cap, i, r), 0.0))
         for j in SECTORS
-            cost += g("xa0", (r, j, i)) * (1 + g("ti", (j, i, r)))
+            cost += get(p["xa0"], (r, j, i), 0.0) * (1 + get(p["ti"], (j, i, r), 0.0))
         end
-        gap = max(gap, abs(xp - g("ptxy0", (r, i)) - cost))
+        gap = max(gap, abs(xp - get(p["ptxy0"], (r, i), 0.0) - cost))
     end
     egap = 0.0
     for r in REGIONS, t in TECH
-        xp = ge("xp0_", (t, r))
+        xp = get(elec["xp0_"], (t, r), 0.0)
         xp == 0 && continue
-        tdr = ge("td_", (r, t))
+        tdr = get(elec["td_"], (r, t), 0.0)
         cost = 0.0
         for k in keys(elecin)
             k[1] == t && k[3] == r || continue
@@ -489,18 +489,10 @@ function prepare(source)
         sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
         sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
     end
-    ti(a...) = g("ti", a)
-    tf(a...) = g("tf", a)
-    tg(a...) = g("tg", a)
-    tp(a...) = g("tp", a)
-    tx(a...) = g("tx", a)
-    tm(a...) = g("tm", a)
-    pc0(a...) = g("pc0", a)
-    pg0(a...) = g("pg0", a)
     return (;
-        p, g, ge, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
-        elas, esup, esube, sigu, delas, cr, wst,
-        ti, tf, tg, tp, tx, tm, pc0, pg0,
+        p, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
+        selas, esup, esube, sigu, delas, cr, wst,
+
         a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, xat0, xd0,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
@@ -555,3 +547,12 @@ function replication_error(calib_path, sim_path)
     end
     return dprod, dgdp, dtarget
 end
+
+
+
+
+
+
+
+
+

@@ -526,9 +526,7 @@ function load_prepare_inputs(source)
     aeeigr_raw = load_gms_table(book["eppatrend_aeeigr"])
     years = load_period_set(book["other_period"])
 
-    g(name, key) = get(p[name], key, 0.0)
-    ge(name, key) = get(e[name], key, 0.0)
-    return (; p, e, g, ge, satellite = book, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, epslon_raw, ann, pop, aeeigr_raw, years)
+    return (; p, e, satellite = book, selas, esup, esube, sigu, delas, crtable, bio, nhreta, wst, os, esh, mvh, ej_use_iea, epslon_raw, ann, pop, aeeigr_raw, years)
 end
 
 """
@@ -579,3 +577,4 @@ function gams_table(text::AbstractString)
     end
     return out
 end
+
