@@ -38,9 +38,9 @@ function Load_satellite_data(data::Dict)
                 data[sheet] = Dict(
                     (
                         value_df[i, 1] isa Number ? value_df[i, 1] : Symbol(value_df[i, 1]),
-                        header_df[1, j] isa Number ? header_df[1, j - 1] : Symbol(header_df[1, j - 1])
+                        header_df[1, j - 1] isa Number ? header_df[1, j - 1] : Symbol(header_df[1, j - 1])
                     ) => value_df[i, j]
-                    for i in 1:nrow(value_df), j in 2:ncols
+                    for i in 1:nrow(value_df), j in 2:ncols+1
                 )
             elseif ncol(df) == 2
                 data[sheet] = Dict(
