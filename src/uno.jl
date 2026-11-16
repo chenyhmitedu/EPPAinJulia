@@ -1,4 +1,4 @@
-# Similar to set declarations in GAMS. Keep the scope global.
+﻿# Similar to set declarations in GAMS. Keep the scope global.
 
 const REGIONS   = [:USA, :CAN, :MEX, :JPN, :ANZ, :EUR, :ROE, :RUS, :ASI, :CHN, :IND, :BRA, :AFR, :MES, :LAM, :REA, :KOR, :IDZ]
 const SECTORS   = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
@@ -28,9 +28,12 @@ const PROPFRAC  = 0.2
 const DPE       = 0.05
 const ROR       = 0.1
 
+# Based on 1) parameters declared in eppacore.jl; 2) elecpower.gms
+
+
 function uno_data(data::Dict)
 
-    labor   = Dict(r => sum(get(data["labd0"], (r, i), 0.0) for i in SECTORS) + get(data["labdg0"], (r,), 0.0) for r in REGIONS)
+    labor   = Dict(r => sum(get(data["labd0"], (r, i), 0.0) for i in SECTORS) + get(data["labdg0"], r, 0.0) for r in REGIONS)
     kapital = Dict(r => sum(get(data["kapd0"], (r, i), 0.0) for i in SECTORS) for r in REGIONS)
     ffact   = Dict((i, r) => get(data["ffactd0"], (r, i), 0.0) * (1 + get(data["tf"], (:lnd, i, r), 0.0)) for r in REGIONS, i in SECTORS)
     rshr    = Dict((i, r) => get(data["rshr"], (i, r), 0.0) for i in TECH, r in REGIONS)
@@ -40,7 +43,6 @@ function uno_data(data::Dict)
     r0      = Dict((i, r) => rshr[i, r] * xp0_[i, r] * (1-td_[i, r]) / (1+elecint[i, :cap, r]) for i in TECH_NHR, r in REGIONS)
     elecin  = Dict((i, j, r) => get(data["elecin"], (i, j, r), 0.0) for i in TECH, j in LKR ∪ SECTORS, r in REGIONS)
     elecinmr0 = Dict((i, r) => elecin[i, :cap, r] - r0[i, r] for i in TECH_NHR, r in REGIONS)
-    
     opelecint = Dict(
             (i, r) => (denom = sum(elecin[i, f, r] for f in LK);
                        denom == 0.0 ? 0.0 :
@@ -99,7 +101,7 @@ function uno_data(data::Dict)
         labor[r]    = labor[r] - sum(zshr[i, r] * elecin0[i, :lab, r] for i in TECH_NHR)
     end
 
-    ffact0 = Dict((i, r) => ffact[i, r] for i in TECH_NHR, r in REGIONS)
+#    ffact0 = Dict((i, r) => ffact[i, r] for i in TECH_NHR, r in REGIONS)
 
     nhrshare = Dict(
         (i, r) => begin
@@ -126,14 +128,47 @@ function uno_data(data::Dict)
         end
         for i in TECH_NHR, r in REGIONS
     )    
+    
+    g0      = Dict(
+        r => get(data["kapdg0"], r, 0.0) + get(data["labdg0"], r, 0.0) + get(data["trg0"], r, 0.0) 
+         + sum(get(data["xdg0"], (r, i), 0.0)+ get(data["xmg0"], (r, i), 0.0) for i in SECTORS) 
+         for r in REGIONS
+    )
+    cons0   = Dict(r => get(data["cons0"], r, 0.0) for r in REGIONS)
+    inv0    = Dict(r => sum(get(data["xdi0"], (r, i), 0.0) + get(data["xmi0"], (r, i), 0.0) for i in SECTORS) for r in REGIONS)
 
-#=
+    homm0 = Dict{Symbol,Float64}()
+    homx0 = Dict{Symbol,Float64}()
+    for r in REGIONS
+        imp = sum(get(data["wtflow0"], (r, rr, :oil), 0.0) * (1 + get(data["tx"], (:oil, rr, r), 0.0)) for rr in REGIONS) 
+        exp = sum(get(data["wtflow0"], (rr, r, :oil), 0.0) * (1 + get(data["tx"], (:oil, r, rr), 0.0)) for rr in REGIONS)
+        homm0[r] = max(0.0, imp - exp)
+        homx0[r] = max(0.0, -imp + exp)
+    end
 
-nhrshare(i_nhr,r)$xp0_(i_nhr,r)			= elecin(i_nhr,"res",r)/((1-td_(r,i_nhr))*xp0_(i_nhr,r));
-nhrsigma(i_nhr,r)$(1-nhrshare(i_nhr,r))		= nhreta(i_nhr,r)*nhrshare(i_nhr,r)/(1-nhrshare(i_nhr,r)); 
+    rgdp0 = Dict{Symbol,Float64}()
+    for r in REGIONS
+        exports = 0.0
+        imports = 0.0
+        for rr in REGIONS, i in SECTORS
+            i == :oil && continue
+            exports += (1 + get(data["tx"], (i, r, rr), 0.0)) * get(data["wtflow0"], (rr, r, i), 0.0)
+            imports += (1 + get(data["tx"], (i, rr, r), 0.0)) * get(data["wtflow0"], (r, rr, i), 0.0)
+        end
+        rgdp0[r] = cons0[r] + inv0[r] + g0[r] + exports - imports + homx0[r] - homm0[r]
+    end
 
-=#
+    data["kapital"]     = kapital
+    data["labor"]       = labor
+    data["ffact"]       = ffact
+    data["nhrshare"]    = nhrshare
+    data["nhrsigma"]    = nhrsigma
+    data["g0"]          = g0
+    data["rgdp0"]       = rgdp0
 
+    return data
 
-    return kapital, ffact0, nhrshare, nhrsigma
 end
+
+
+

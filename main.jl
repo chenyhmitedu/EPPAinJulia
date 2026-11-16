@@ -1,8 +1,8 @@
-cd(@__DIR__)    # Set the working directory at where this file is located
+﻿cd(@__DIR__)    # Set the working directory at where this file is located
 using Pkg
 Pkg.activate(".")
 #Pkg.add(["CSV", "DataFrames", "JLD2", "JuMP", "MPSGE", "PATHSolver", "XLSX"])
-Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
+#Pkg.add(path="https://github.com/chenyhmitedu/CSVtoDIC")
 
 Pkg.instantiate()
 using EPPAinJulia, JuMP, MPSGE, DataFrames, XLSX
@@ -14,4 +14,4 @@ Prepare_data() = Load_gtap_aggr() |> Load_gtap_disa |> Load_satellite_data
 data = Prepare_data()
 x = uno_data(data)
 
-B = (; (Symbol(k) => v for (k, v) in data)...)
+B = (; (Symbol(k) => v for (k, v) in x)...)
