@@ -1,0 +1,3 @@
+﻿{
+  "julia.executablePath": "${workspaceFolder}\\.tools\\julia-1.10.12\\bin\\julia.exe"
+}

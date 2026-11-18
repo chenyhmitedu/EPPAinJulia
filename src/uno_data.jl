@@ -381,7 +381,9 @@ function prepare(source)
         return 0.0
     end
     for r in REGIONS, e in (:coal, :roil, :gas)
-        total = sum(ejuse_all0[(e, g, r)] for g in EJUSE_SECTORS)
+        total = e == :roil ?
+            sum(ejuse_all0[(:oil, g, r)] for g in EJUSE_SECTORS) :
+            sum(ejuse_all0[(e, g, r)] for g in EJUSE_SECTORS)
         ejadj[(e, r)] = total == 0 ? 0.0 : ej_use_iea_level(e, r) / total
     end
 
@@ -585,6 +587,7 @@ function replication_error(calib_path, sim_path)
     end
     return dprod, dgdp, dtarget
 end
+
 
 
 
