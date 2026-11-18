@@ -380,14 +380,14 @@ function prepare(source)
         e == :roil && return get(ej_use_iea, (:oil, r), 0.0)
         return 0.0
     end
-    for r in REGIONS, e in (:coal, :roil, :gas)
+    for r in REGIONS, e in ENERGY
         total = e == :roil ?
             sum(ejuse_all0[(:oil, g, r)] for g in EJUSE_SECTORS) :
             sum(ejuse_all0[(e, g, r)] for g in EJUSE_SECTORS)
-        ejadj[(e, r)] = total == 0 ? 0.0 : ej_use_iea_level(e, r) / total
+        ejadj[(e, r)] = e == :elec ? 1.0 : (total == 0 ? 0.0 : ej_use_iea_level(e, r) / total)
     end
 
-    ejadj_level(e, r) = get(ejadj, (e, r), 1.0)
+    ejadj_level(e, r) = ejadj[(e, r)]
     for (key, value) in ejuse0
         e, _, r = key
         ejuse[key] = value * ejadj_level(e, r)
