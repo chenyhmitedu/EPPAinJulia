@@ -105,10 +105,10 @@ function prepare(source)
     end
 
     a0 = Dict{Tuple{Symbol,Symbol},Float64}()
-    xp0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp = Dict{Tuple{Symbol,Symbol},Float64}()
     d0 = Dict{Tuple{Symbol,Symbol},Float64}()
-    xp0_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
-    xp0_phom = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp_pdb = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp_phom = Dict{Tuple{Symbol,Symbol},Float64}()
     td = Dict{Tuple{Symbol,Symbol},Float64}()
     td_ = Dict{Tuple{Symbol,Symbol},Float64}()
     cons0 = Dict{Symbol,Float64}()
@@ -134,15 +134,15 @@ function prepare(source)
         for i in SECTORS
             a0[(r, i)] = get(p["xp0"], (r, i), 0.0) - get(p["es0"], (r, i), 0.0) + get(p["xm0"], (r, i), 0.0) - get(p["vst"], (i, r), 0.0)
             d0[(r, i)] = get(p["xp0"], (r, i), 0.0) - get(p["es0"], (r, i), 0.0) - get(p["vst"], (i, r), 0.0)
-            xp = get(p["xp0"], (r, i), 0.0)
-            xp0[(r, i)] = xp
-            xp0_pdb[(r, i)] = 0.0
-            xp0_phom[(r, i)] = 0.0
+            xpval = get(p["xp0"], (r, i), 0.0)
+            xp[(r, i)] = xpval
+            xp_pdb[(r, i)] = 0.0
+            xp_phom[(r, i)] = 0.0
             if i == :oil
-                xp0[(r, i)] = 0.0
-                xp0_phom[(r, i)] = xp
+                xp[(r, i)] = 0.0
+                xp_phom[(r, i)] = xpval
             end
-            td[(r, i)] = xp == 0 ? 0.0 : get(p["ptxy0"], (r, i), 0.0) / xp
+            td[(r, i)] = xpval == 0 ? 0.0 : get(p["ptxy0"], (r, i), 0.0) / xpval
             govdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdg0"], (r, i), 0.0) + get(p["xmg0"], (r, i), 0.0)
             invdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0)
             labd0[(r, i)] = get(labd0, (r, i), 0.0)
@@ -219,13 +219,13 @@ function prepare(source)
     end
 
     for r in REGIONS
-        xp0[(r, :food)] -= tbo[r]
-        xp0_pdb[(r, :food)] = tbo[r]
+        xp[(r, :food)] -= tbo[r]
+        xp_pdb[(r, :food)] = tbo[r]
         if r == :bra
-            xp0[(r, :food)] += tbo[r]
-            xp0_pdb[(r, :food)] = 0.0
-            xp0[(r, :eint)] -= tbo[r]
-            xp0_pdb[(r, :eint)] = tbo[r]
+            xp[(r, :food)] += tbo[r]
+            xp_pdb[(r, :food)] = 0.0
+            xp[(r, :eint)] -= tbo[r]
+            xp_pdb[(r, :eint)] = tbo[r]
         end
     end
 
@@ -281,7 +281,7 @@ function prepare(source)
     wele0 = Dict{Symbol,Float64}()
     tele0 = Dict{Symbol,Float64}()
     efout0 = Dict{Symbol,Float64}()
-    xp0_ = Dict{Tuple{Symbol,Symbol},Float64}()
+    xp_ = Dict{Tuple{Symbol,Symbol},Float64}()
     eprod__over_xp0_ = Dict{Tuple{Symbol,Symbol},Float64}()
     eprod_over_xp0 = Dict{Symbol,Float64}()
     sav0 = Dict{Symbol,Float64}()
@@ -295,19 +295,19 @@ function prepare(source)
     labor = Dict(r => sum(get(p["labd0"], (r, i), 0.0) for i in SECTORS) + get(p["labdg0"], (r,), 0.0) for r in REGIONS)
     rshr = Dict(:nele => 0.15, :hele => 0.30, :rele => 0.15)
     for r in REGIONS, t in TECH_NHR
-        xp = get(elec["xp0_"], (t, r), 0.0)
+        xpval = get(elec["xp0_"], (t, r), 0.0)
         tdr = td_[(r, t)]
         cap0 = get(elecin, (t, :cap, r), 0.0)
         lab0 = get(elecin, (t, :lab, r), 0.0)
         tc = get(elecint, (t, :cap, r), 0.0)
         tl = get(elecint, (t, :lab, r), 0.0)
-        r0 = (1 + tc) == 0 ? 0.0 : rshr[t] * xp * (1 - tdr) / (1 + tc)
+        r0 = (1 + tc) == 0 ? 0.0 : rshr[t] * xpval * (1 - tdr) / (1 + tc)
         elecinmr0 = cap0 - r0
         zshr = 0.0
         opelec = 1.0
         if elecinmr0 <= 0 && (cap0 + lab0) > 0
             opelec = ((1 + tc) * cap0 + (1 + tl) * lab0) / (cap0 + lab0)
-            zshr = min(0.9, xp * (1 - tdr) / opelec * rshr[t] / (cap0 + lab0))
+            zshr = min(0.9, xpval * (1 - tdr) / opelec * rshr[t] / (cap0 + lab0))
         end
         if elecinmr0 > 0
             elecin[(t, :cap, r)] = cap0 - r0
@@ -327,7 +327,7 @@ function prepare(source)
             ffact_e[(t, r)] = 0.0
         end
         res = get(elecin, (t, :res, r), 0.0)
-        den = (1 - tdr) * xp
+        den = (1 - tdr) * xpval
         share = den == 0 ? 0.0 : res / den
         eta = get(nhreta, (t, r), 0.0)
         nhrsigma[(t, r)] = (1 - share) == 0 ? 0.0 : eta * share / (1 - share)
@@ -419,12 +419,12 @@ function prepare(source)
         tele0[r] = get(elec["xp0_"], (:tele, r), 0.0)
         efout0[r] = sum(get(elec["xp0_"], (i_, r), 0.0) for i_ in TECH_F)
         for i_ in TECH
-            xp0_[(i_, r)] = get(elec["xp0_"], (i_, r), 0.0)
-            xp = xp0_[(i_, r)]
-            eprod__over_xp0_[(i_, r)] = xp == 0 ? 0.0 : get(elec["eprod_"], (i_, r), 0.0) / xp
+            xp_[(i_, r)] = get(elec["xp0_"], (i_, r), 0.0)
+            xpval = xp_[(i_, r)]
+            eprod__over_xp0_[(i_, r)] = xpval == 0 ? 0.0 : get(elec["eprod_"], (i_, r), 0.0) / xpval
         end
         eprod_sum = sum(get(elec["eprod_"], (i_, r), 0.0) for i_ in TECH)
-        elec_out = xp0[(r, :elec)]
+        elec_out = xp[(r, :elec)]
         eprod_over_xp0[r] = elec_out == 0 ? 0.0 : eprod_sum / elec_out
     end
 
@@ -450,20 +450,20 @@ function prepare(source)
     gap = 0.0
     for r in REGIONS, i in SECTORS
         i == :elec && continue
-        xp = get(p["xp0"], (r, i), 0.0)
-        xp == 0 && continue
+        xpval = get(p["xp0"], (r, i), 0.0)
+        xpval == 0 && continue
         cost = ffact[(r, i)]
         cost += get(p["labd0"], (r, i), 0.0) * (1 + get(p["tf"], (:lab, i, r), 0.0))
         cost += get(p["kapd0"], (r, i), 0.0) * (1 + get(p["tf"], (:cap, i, r), 0.0))
         for j in SECTORS
             cost += get(p["xa0"], (r, j, i), 0.0) * (1 + get(p["ti"], (j, i, r), 0.0))
         end
-        gap = max(gap, abs(xp - get(p["ptxy0"], (r, i), 0.0) - cost))
+        gap = max(gap, abs(xpval - get(p["ptxy0"], (r, i), 0.0) - cost))
     end
     egap = 0.0
     for r in REGIONS, t in TECH
-        xp = get(elec["xp0_"], (t, r), 0.0)
-        xp == 0 && continue
+        xpval = get(elec["xp0_"], (t, r), 0.0)
+        xpval == 0 && continue
         tdr = get(elec["td_"], (r, t), 0.0)
         cost = 0.0
         for k in keys(elecin)
@@ -473,7 +473,7 @@ function prepare(source)
             rate = get(elecint, (t, inp, r), 0.0)
             cost += q * (1 + rate)
         end
-        egap = max(egap, abs(xp * (1 - tdr) - cost))
+        egap = max(egap, abs(xpval * (1 - tdr) - cost))
     end
     println("benchmark identity |xp-tax-cost|=", gap, " |elec xp*(1-td)-cost|=", egap)
 
@@ -533,11 +533,12 @@ function prepare(source)
         p, dat = p, elec = raw.e, satellite = raw.satellite, REGIONS, SECTORS, ann, pop,
         selas, esup, esube, sigu, delas, cr, wst,
 
-        a0, xp0, d0, xp0_pdb, xp0_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
+        a0, xp, d0, xp_pdb, xp_phom, td, cons0, inv0, g0, pwdem0, govdem0, govoil0, invdem0, invoil0, ytout0, trnvst0, ffact, ffend0, ffgprod0, xa0, xaroila, xaroilc, labd0, kapd0,
         xdc, xmc, xm0, wtflow, mvtwr, xat0, xd0,
         purtrn, tbo, tfo, toi, tse, own, hhwedge, tottrn, xh, ence, ence1, pac0,
         homm0, homx0, homt0, vhomm0, vhomx0, txhom, tmhom, homadj, trnadj,
-        elecin, elecint, ffact_e, nhrsigma, sele0, dispgen0, wele0, tele0, efout0, xp0_, eprod__over_xp0_, eprod_over_xp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
+        elecin, elecint, ffact_e, nhrsigma, sele0, dispgen0, wele0, tele0, efout0, xp_, eprod__over_xp0_, eprod_over_xp0, sav0, aeeigr, aeei, ejadj, ejuse0, ejuse_all0, ejuse_all, ejuse, euse0, ejuse_over_euse, sco2coef, sco20, kapital, labor, rgdp0,
+        xp0 = xp, xp0_pdb = xp_pdb, xp0_phom = xp_phom, xp0_ = xp_,
     )
 end
 
@@ -587,6 +588,10 @@ function replication_error(calib_path, sim_path)
     end
     return dprod, dgdp, dtarget
 end
+
+
+
+
 
 
 

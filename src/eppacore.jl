@@ -143,10 +143,10 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i in NOT_AENOE, r in R
-        B.xp0[(r, i)] > 0 || continue
+        B.xp[(r, i)] > 0 || continue
         @production(MGE, D[i, r], [t=2, s=B.sigu[(i, r)], b=>s=B.esup[(i, r)], a=>b=0, ee=>a=B.selas[(i, :e_kl, r)], va=>ee=B.selas[(i, :l_k, r)], en=>ee=B.selas[(i, :noe_el, r)], en1=>en=B.esube[(i, r)], oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
-            @output(PDB[:food, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PD[i, r],          B.xp[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PDB[:food, r],     B.xp_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.p["ti"][(j, i, r)]) for j in NE]...
             [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],    a,    taxes=[Tax(RA[r], ti[:roil, i, r])],  reference_price=1 + B.p["ti"][(:roil, i, r)])]...
             @input(PL[r],              B.labd0[(r, i)],                   va,   taxes=[Tax(RA[r], tf[:lab, i, r])],   reference_price=1 + B.p["tf"][(:lab, i, r)])
@@ -161,10 +161,10 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i in [:eint], r in R
-        B.xp0[(r, i)] > 0 || continue
+        B.xp[(r, i)] > 0 || continue
         @production(MGE, D[i, r], [t=2, s=B.sigu[(i, r)], b=>s=B.esup[(i, r)], a=>b=0, ee=>a=B.selas[(i, :e_kl, r)], va=>ee=B.selas[(i, :l_k, r)], en=>ee=B.selas[(i, :noe_el, r)], en1=>en=B.esube[(i, r)], oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
-            @output(PDB[:eint, r],     B.xp0_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PD[i, r],          B.xp[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PDB[:eint, r],     B.xp_pdb[(r, i)],                 t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.p["ti"][(j, i, r)]) for j in NE]...
             [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],    a,    taxes=[Tax(RA[r], ti[:roil, i, r])],  reference_price=1 + B.p["ti"][(:roil, i, r)])]...
             @input(PL[r],              B.labd0[(r, i)],                   va,   taxes=[Tax(RA[r], tf[:lab, i, r])],   reference_price=1 + B.p["tf"][(:lab, i, r)])
@@ -179,9 +179,9 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i in AGRI, r in R
-        B.xp0[(r, i)] > 0 || continue
+        B.xp[(r, i)] > 0 || continue
         @production(MGE, D[i, r], [t=0, s=B.sigu[(i, r)], a=>s=0.7, va=>a=B.selas[(i, :l_k, r)], fx=>a=B.esup[(i, r)], e=>fx=B.selas[(i, :e_kl, r)], ne=>e=0, en=>e=B.selas[(i, :noe_el, r)], en1=>en=B.esube[(i, r)], oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PD[i, r],          B.xp[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  ne,   taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.p["ti"][(j, i, r)]) for j in NE]...
             [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],    ne,   taxes=[Tax(RA[r], ti[:roil, i, r])],  reference_price=1 + B.p["ti"][(:roil, i, r)])]...
             @input(PL[r],              B.labd0[(r, i)],                   va,   taxes=[Tax(RA[r], tf[:lab, i, r])],   reference_price=1 + B.p["tf"][(:lab, i, r)])
@@ -196,10 +196,10 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i in ENOE, r in R
-        (B.xp0[(r, i)] > 0 || B.xp0_phom[(r, i)] > 0) || continue
+        (B.xp[(r, i)] > 0 || B.xp_phom[(r, i)] > 0) || continue
         @production(MGE, D[i, r], [t=0, s=0, b=>s=B.esup[(i, r)], a=>b=0, va=>a=B.selas[(i, :l_k, r)], en=>a=B.selas[(i, :noe_el, r)], en1=>en=B.esube[(i, r)], oil=>en1=0, gas=>en1=0, coal=>en1=0, roil=>en1=0], begin
-            @output(PHOM[r],           B.xp0_phom[(r, i)],                t,    taxes=[Tax(RA[r], td[i, r])])
-            @output(PD[i, r],          B.xp0[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PHOM[r],           B.xp_phom[(r, i)],                t,    taxes=[Tax(RA[r], td[i, r])])
+            @output(PD[i, r],          B.xp[(r, i)],                     t,    taxes=[Tax(RA[r], td[i, r])])
             [@input(PA[j, r],          B.xa0[(r, j, i)],                  a,    taxes=[Tax(RA[r], ti[j, i, r])],      reference_price=1 + B.p["ti"][(j, i, r)]) for j in NE]...
             [@input(PA[:roil, r],      aeei[i, r] * B.xaroila[(r, i)],    a,    taxes=[Tax(RA[r], ti[:roil, i, r])],  reference_price=1 + B.p["ti"][(:roil, i, r)])]...
             @input(PL[r],              B.labd0[(r, i)],                   va,   taxes=[Tax(RA[r], tf[:lab, i, r])],   reference_price=1 + B.p["tf"][(:lab, i, r)])
@@ -214,9 +214,9 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for r in R
-        B.xp0[(r, :elec)] > 0 || continue
+        B.xp[(r, :elec)] > 0 || continue
         @production(MGE, D[:elec, r], [t=0, s=0, s001=>s=1, s011=>s001=1], begin
-            @output(PD[:elec, r],      B.xp0[(r, :elec)],   t)
+            @output(PD[:elec, r],      B.xp[(r, :elec)],   t)
             [@input(PDE[:sele, r],     B.sele0[r],          s001)]...
             [@input(PDE[:dispgen, r],  B.dispgen0[r],       s011)]...
             [@input(PDE[:wele, r],     B.wele0[r],          s011)]...
@@ -224,14 +224,14 @@ function _eppacore(B, simu::Integer = 0)
         end)
         @production(MGE, DE[:elec, r], [t=0, s=1.5], begin
             @output(PDE[:dispgen, r],  B.efout0[r],        t)
-            [@input(PDE[i_, r],        B.xp0_[(i_, r)],    s) for i_ in TECH_F]...
+            [@input(PDE[i_, r],        B.xp_[(i_, r)],    s) for i_ in TECH_F]...
         end)
     end
 
     for i_ in TECH_F, r in R
-        B.xp0_[(i_, r)] > 0 || continue
+        B.xp_[(i_, r)] > 0 || continue
         @production(MGE, DE[i_, r], [t=0, s=0, bc=>s=0.6, ac=>bc=0, eec=>ac=B.selas[(:elec, :e_kl, r)], curb=>eec=0, vac=>eec=B.selas[(:elec, :l_k, r)]], begin
-            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
+            @output(PDE[i_, r],        B.xp_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],               curb, taxes=[Tax(RA[r], elecint[i_, :coal, r])], reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -246,9 +246,9 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i_ in TECH_NHR, r in R
-    B.xp0_[(i_, r)] > 0 && B.ffact_e[(i_, r)] > 0 || continue
+    B.xp_[(i_, r)] > 0 && B.ffact_e[(i_, r)] > 0 || continue
         @production(MGE, DE[i_, r], [t=0, s=0, bc=>s=B.nhrsigma[(i_, r)], ac=>bc=0, eec=>ac=B.selas[(:elec, :e_kl, r)], curb=>eec=0, vac=>eec=B.selas[(:elec, :l_k, r)]], begin
-            @output(PDE[:dispgen, r],  B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
+            @output(PDE[:dispgen, r],  B.xp_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],               curb, taxes=[Tax(RA[r], elecint[i_, :coal, r])], reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -263,9 +263,9 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i_ in TECH_N, r in R
-        B.xp0_[(i_, r)] > 0 || continue
+        B.xp_[(i_, r)] > 0 || continue
         @production(MGE, DE[i_, r], [t=0, s=0, s001=>s=B.wst[(i_, r)], ac=>s001=0, eec=>ac=B.selas[(:elec, :e_kl, r)], curb=>eec=0, vac=>eec=B.selas[(:elec, :l_k, r)]], begin
-            @output(PDE[i_, r],        B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
+            @output(PDE[i_, r],        B.xp_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],               curb, taxes=[Tax(RA[r], elecint[i_, :coal, r])], reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -279,9 +279,9 @@ function _eppacore(B, simu::Integer = 0)
     end
 
     for i_ in [:tele], r in R
-        B.xp0_[(i_, r)] > 0 || continue
+        B.xp_[(i_, r)] > 0 || continue
         @production(MGE, DE[i_, r], [t=0, s=0, s001=>s=0.6, ac=>s001=0, eec=>ac=B.selas[(:elec, :e_kl, r)], curb=>eec=0, vac=>eec=B.selas[(:elec, :l_k, r)]], begin
-            @output(PDE[:tnd, r],      B.xp0_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
+            @output(PDE[:tnd, r],      B.xp_[(i_, r)],                                           t,    taxes=[Tax(RA[r], tde[i_, r])])
             [@input(PA[j, r],          B.elecin[(i_, j, r)],                                     ac,   taxes=[Tax(RA[r], elecint[i_, j, r])],    reference_price=1 + B.elecint[(i_, j, r)]) for j in NE]...
             @input(PAC[:gas, r],       aeei[:elec, r] * B.elecin[(i_, :gas, r)],                curb, taxes=[Tax(RA[r], elecint[i_, :gas, r])],  reference_price=1 + B.elecint[(i_, :gas, r)])
             @input(PAC[:coal, r],      aeei[:elec, r] * B.elecin[(i_, :coal, r)],               curb, taxes=[Tax(RA[r], elecint[i_, :coal, r])], reference_price=1 + B.elecint[(i_, :coal, r)])
@@ -477,6 +477,7 @@ function _eppacore(B, simu::Integer = 0)
     end
     return MGE, state
 end
+
 
 
 
