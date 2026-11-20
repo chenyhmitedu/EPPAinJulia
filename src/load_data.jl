@@ -44,7 +44,8 @@ function Load_satellite_data(data::Dict)
                 )
             elseif ncol(df) == 2
                 data[sheet] = Dict(
-                    df[i, 1] => df[i, 2]
+                    df[i, 1] isa Number ? df[i, 1] : Symbol(df[i, 1]) 
+                    => df[i, 2]
                     for i in 1:nrow(df)
                 )
             else

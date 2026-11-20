@@ -13,5 +13,4 @@ PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1
 Prepare_data() = Load_gtap_aggr() |> Load_gtap_disa |> Load_satellite_data
 data = Prepare_data()
 x = uno_data(data)
-
 B = (; (Symbol(k) => v for (k, v) in x)...)
