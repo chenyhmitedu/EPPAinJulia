@@ -493,11 +493,6 @@ function load_prepare_inputs(source)
     book = source.satellite
 
     selas = load_gms_table(book["eppaelas_selas"])
-    for (k, v) in selas
-        if length(k) == 3 && k[2] == :noe_el
-            selas[k] = 3v
-        end
-    end
     esup = load_gms_table(book["eppaelas_esup"])
     esube = load_gms_table(book["eppaelas_esube"])
     sigu = load_gms_table(book["eppaelas_sigu"])
