@@ -9,6 +9,14 @@ module EPPAinJulia
     export Load_gtap_aggr
     export Load_gtap_disa
     export Load_satellite_data
+    
     include("uno.jl")
     export uno_data
+
+    include("eppacore.jl")
+    export EPPACore
+
+    include("eppa_model.jl")
+    export EPPA_model
+
 end # module EPPAinJulia

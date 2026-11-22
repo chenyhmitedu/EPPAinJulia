@@ -14,3 +14,7 @@ Prepare_data() = Load_gtap_aggr() |> Load_gtap_disa |> Load_satellite_data
 data = Prepare_data()
 x = uno_data(data)
 B = (; (Symbol(k) => v for (k, v) in x)...)
+
+# EPPA_model is defined in MGE.jl 
+MGE = EPPA_model(B, -1)
+solve!(MGE, cumulative_iteration_limit = 0)

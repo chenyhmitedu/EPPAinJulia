@@ -23,6 +23,7 @@ const PDE_DIM   = [:dispgen, TECH_F..., TECH_N..., :tnd]
 const NOT_AENOE = [:food, :othr, :serv, :tran, :dwe]
 const LKR       = [:lab, :cap, :res]
 const LK        = [:lab, :cap]
+const PRIMARY   = [:lab, :cap, :lnd, :res]
 
 const HTRNS     = 0.3753
 const PROPFRAC  = 0.2
@@ -40,7 +41,7 @@ function uno_data(data::Dict)
     rshr    = Dict((i, r) => get(data["rshr"], (i, r), 0.0) for i in TECH, r in REGIONS)
     xp_     = Dict((i, r) => get(data["xp0_"], (i, r), 0.0) for i in TECH, r in REGIONS)
     td_     = Dict((i, r) => get(data["td_"], (r, i), 0.0) for r in REGIONS, i in TECH)
-    elecint = Dict((i, f, r) => get(data["elecint"], (i, f, r), 0.0) for i in TECH, f in LKR, r in REGIONS)
+    elecint = Dict((i, x, r) => get(data["elecint"], (i, x, r), 0.0) for i in TECH, x in LKR ∪ SECTORS, r in REGIONS)
     r0      = Dict((i, r) => rshr[i, r] * xp_[i, r] * (1-td_[i, r]) / (1+elecint[i, :cap, r]) for i in TECH_NHR, r in REGIONS)
     elecin  = Dict((i, j, r) => get(data["elecin"], (i, j, r), 0.0) for i in TECH, j in LKR ∪ SECTORS, r in REGIONS)
     elecinmr0 = Dict((i, r) => elecin[i, :cap, r] - r0[i, r] for i in TECH_NHR, r in REGIONS)
@@ -207,7 +208,7 @@ function uno_data(data::Dict)
         tfo[r] = data["os"][r] * ence0
         toi[r] = data["mvh"][r]
         owntrn = data["es"][r] * get(data["cons0"], r, 0.0)
-        foodp = r == :bra ? :eint : :food
+        foodp = r == :BRA ? :eint : :food
         tottrn[r] = purtrn[r] * get(data["pc0"], (:tran, r), 0.0) + owntrn + (pcR - get(data["pc0"], (foodp, r), 0.0)) * tbo[r]
         tse[r] = (owntrn - tfo[r] * pcR - toi[r] * get(data["pc0"], (:othr, r), 0.0) - tbo[r] * get(data["pc0"], (foodp, r), 0.0)) / get(data["pc0"], (:serv, r), 0.0)
         own[r] = pcR * (tfo[r] + tbo[r]) + get(data["pc0"], (:othr, r), 0.0) * toi[r] + get(data["pc0"], (:serv, r), 0.0) * tse[r]
@@ -582,68 +583,94 @@ function uno_data(data::Dict)
         sco20[e, :htrn, r] = sco2coef[e] * ejuse[e, :htrn, r]
     end
 
-#=
-pwdem0[r] = cons0[r] + inv0[r]
-    for r in REGIONS, e in ENERGY
-        for g in SECTORS
-            g == :elec && continue
-            pac0[(e, g, r)] = e == :roil ? xaroilc[(r, g)] : xa0[(r, e, g)]
+    selas = Dict(
+        let
+            s = String(k[1])                 # "eint.noe_el"
+            parts = split(s, ".")            # ["eint", "noe_el"]
+            (Symbol(parts[1]), Symbol(parts[2]), k[2])
+        end => v
+        for (k, v) in data["selas0"]
+    )
+
+    sele0 = Dict(
+        r => get(data["xp0_"], (:sele, r), 0.0)
+        for r in REGIONS
+    )
+
+    wele0 = Dict(
+        r => get(data["xp0_"], (:wele, r), 0.0)
+        for r in REGIONS
+    )
+
+    tele0 = Dict(
+        r => get(data["xp0_"], (:tele, r), 0.0)
+        for r in REGIONS
+    )
+
+    wst = Dict(
+        (i, r) => get(data["wstsigma"], (i, r), 0)
+        for i in TECH, r in REGIONS
+    )
+
+    xat0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    xd0 = Dict{Tuple{Symbol,Symbol},Float64}()
+    for r in REGIONS, i in SECTORS
+        xat0[(r, i)] = a0[(r, i)]
+        xd0[(r, i)] = d0[(r, i)]
+        if (i == :food && r != :BRA) || (i == :eint && r == :BRA)
+            xat0[(r, i)] -= tbo[r]
+            xd0[(r, i)] -= tbo[r]
         end
-        for t in TECH
-            pac0[(e, t, r)] = e == :roil ? elecin[(t, :roil, r)] * cr(:roil, :elec, r) : elecin[(t, e, r)]
-        end
-        pac0[(e, :households, r)] = e == :roil ? ence1[(e, r)] * cr(:roil, :final, r) : ence1[(e, r)]
-        pac0[(e, :htrn, r)] = e == :roil ? tfo[r] * cr(:roil, :final, r) : 0.0
     end
 
+    # Dictionaries exist but need to avoid missing keys
 
- xaroilc[(r, i)] = xaroil * cr(:roil, i, r)
- xaroil = get(xa0, (r, :roil, i), 0.0)
+    ti = Dict(
+        (i, j, r) => get(data["ti"], (i, j, r), 0)
+        for i in SECTORS, j in SECTORS, r in REGIONS
+    )
 
-       for rr in REGIONS
-            mvtwr[(r, rr, i)] = sum(get(p["vtwr"], (j, i, rr, r), 0.0) for j in SECTORS)
-        end
+    tf = Dict(
+        (f, j, r) => get(data["tf"], (f, j, r), 0)
+        for f in PRIMARY, j in SECTORS, r in REGIONS
+    )
 
-invdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0)
-inv0[r] = sum(get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0) for i in SECTORS)
-
-    for r in REGIONS
-       for i in SECTORS
-            invdem0[(r, i)] = i == :oil ? 0.0 : get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0)
-            labd0[(r, i)] = get(labd0, (r, i), 0.0)
-            kapd0[(r, i)] = get(kapd0, (r, i), 0.0)
-            xaroil = get(xa0, (r, :roil, i), 0.0)
-            xaroila[(r, i)] = xaroil * (1 - cr(:roil, i, r))
-            xaroilc[(r, i)] = xaroil * cr(:roil, i, r)
-            for j in SECTORS
-                xa0[(r, j, i)] = get(xa0, (r, j, i), 0.0)
-            end
-        end
-    end
-=#
-
-
-
-    #=
+    tg = Dict(
+        (i, r) => get(data["tg"], (i, r), 0)
+        for i in SECTORS, r in REGIONS
+    )
     
-    sco20 = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
-    for r in REGIONS, g in SECTORS
-        g == :elec && continue
-        for e in SCO2_ENERGY
-            sco20[(e, g, r)] = sco2coef[e] * ejuse[(e, g, r)]
-        end
-    end
+    tp = Dict(
+        (i, r) => get(data["tp"], (i, r), 0)
+        for i in SECTORS, r in REGIONS
+    )
 
-    for r in REGIONS, i_ in TECH, e in SCO2_ENERGY
-        sco20[(e, i_, r)] = sco2coef[e] * ejuse[(e, i_, r)]
-    end
+    tx = Dict(
+        (i, rr, r) => get(data["tx"], (i, rr, r), 0)
+        for i in SECTORS, rr in REGIONS, r in REGIONS
+    )
 
-    for r in REGIONS, e in SCO2_ENERGY
-        sco20[(e, :households, r)] = sco2coef[e] * ejuse[(e, :households, r)]
-        sco20[(e, :htrn, r)] = sco2coef[e] * ejuse[(e, :htrn, r)]
-    end
-    
-    =#
+    tm = Dict(
+        (i, rr, r) => get(data["tm"], (i, rr, r), 0)
+        for i in SECTORS, rr in REGIONS, r in REGIONS
+    )
+
+    esup = Dict(
+        (i, r) => get(data["esup"], (i, r), 0)
+        for i in SECTORS, r in REGIONS
+    )
+
+    xm0 = Dict(
+        (r, i) => get(data["xm0"], (r, i), 0)
+        for i in SECTORS, r in REGIONS
+    )
+
+    wtflow0 = Dict(
+        (r, rr, i) => get(data["wtflow0"], (r, rr, i), 0)
+        for r in REGIONS, rr in REGIONS, i in SECTORS
+    )
+
+
 
     data["kapital"]     = kapital
     data["labor"]       = labor
@@ -706,6 +733,25 @@ inv0[r] = sum(get(p["xdi0"], (r, i), 0.0) + get(p["xmi0"], (r, i), 0.0) for i in
     data["pac0"]        = pac0
     data["pwdem0"]      = pwdem0
     data["sco20"]       = sco20
+    data["selas"]       = selas
+    data["sele0"]       = sele0
+    data["wele0"]       = wele0
+    data["tele0"]       = tele0
+    data["wst"]         = wst
+    data["xat0"]        = xat0
+    data["xd0"]         = xd0
+    data["txhom"]       = txhom
+    data["elecint"]     = elecint
+    data["elecin"]      = elecin
+    data["ti"]          = ti
+    data["tf"]          = tf
+    data["tg"]          = tg
+    data["tp"]          = tp
+    data["tx"]          = tx
+    data["tm"]          = tm
+    data["esup"]        = esup
+    data["xm0"]         = xm0
+    data["wtflow0"]      = wtflow0
 
     return data
 
