@@ -1,4 +1,4 @@
-﻿# Similar to set declarations in GAMS. Keep the scope global.
+# Similar to set declarations in GAMS. Keep the scope global.
 
 const REGIONS   = [:USA, :CAN, :MEX, :JPN, :ANZ, :EUR, :ROE, :RUS, :ASI, :CHN, :IND, :BRA, :AFR, :MES, :LAM, :REA, :KOR, :IDZ]
 const SECTORS   = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
@@ -34,6 +34,8 @@ const ROR       = 0.1
 
 
 function uno_data(data::Dict)
+    # Preserve raw inputs and isolate returned dictionaries from the caller.
+    datac = deepcopy(data)
 
     labor   = Dict(r => sum(get(data["labd0"], (r, i), 0.0) for i in SECTORS) + get(data["labdg0"], r, 0.0) for r in REGIONS)
     kapital = Dict(r => sum(get(data["kapd0"], (r, i), 0.0) for i in SECTORS) for r in REGIONS)
@@ -672,88 +674,88 @@ function uno_data(data::Dict)
 
 
 
-    data["kapital"]     = kapital
-    data["labor"]       = labor
-    data["ffact"]       = ffact
-    data["nhrshare"]    = nhrshare
-    data["nhrsigma"]    = nhrsigma
-    data["g0"]          = g0
-    data["rgdp0"]       = rgdp0
-    data["aeei"]        = aeei
-    data["sco2coef"]    = sco2coef
-    data["cr"]          = cr
-    data["xa0"]         = xa0
-    data["purtrn"]      = purtrn
-    data["tbo"]         = tbo
-    data["tfo"]         = tfo
-    data["toi"]         = toi
-    data["tottrn"]      = tottrn
-    data["tse"]         = tse
-    data["own"]         = own
-    data["hhwedge"]     = hhwedge
-    data["xh"]          = xh
-    data["ence1"]       = ence1
-    data["euse0"]       = euse0
-    data["fuel_in"]     = fuel_in
-    data["ejod"]        = ejod
-    data["ejuse0"]      = ejuse0
-    data["ejuse_over_euse"] = ejuse_over_euse
-    data["ejuse"]       = ejuse
-    data["a0"]          = a0
-    data["dispgen0"]    = dispgen0
-    data["efout0"]      = efout0
-    data["td_"]         = td_
-    data["ffend0"]      = ffend0
-    data["ffgprod0"]    = ffgprod0
-    data["govdem0"]     = govdem0
-    data["govoil0"]     = govoil0
-    data["homm0"]       = homm0
-    data["homx0"]       = homx0
-    data["vhomx0"]      = vhomx0
-    data["homt0"]       = homt0
-    data["tmhom"]       = tmhom
-    data["vhomm0"]      = vhomm0
-    data["homadj"]      = homadj
-    data["trnadj"]      = trnadj
-    data["pwdem0"]      = pwdem0
-    data["invoil0"]     = invoil0
-    data["trnvst0"]     = trnvst0
-    data["ytout0"]      = ytout0
-    data["d0"]          = d0
-    data["xp"]          = xp
-    data["xp_phom"]     = xp_phom
-    data["xp_pdb"]      = xp_pdb
-    data["td"]          = td
-    data["xp_"]         = xp_
-    data["inv0"]        = inv0
-    data["invdem0"]     = invdem0
-    data["mvtwr"]       = mvtwr
-    data["xaroilc"]     = xaroilc
-    data["xaroila"]     = xaroila
-    data["pac0"]        = pac0
-    data["pwdem0"]      = pwdem0
-    data["sco20"]       = sco20
-    data["selas"]       = selas
-    data["sele0"]       = sele0
-    data["wele0"]       = wele0
-    data["tele0"]       = tele0
-    data["wst"]         = wst
-    data["xat0"]        = xat0
-    data["xd0"]         = xd0
-    data["txhom"]       = txhom
-    data["elecint"]     = elecint
-    data["elecin"]      = elecin
-    data["ti"]          = ti
-    data["tf"]          = tf
-    data["tg"]          = tg
-    data["tp"]          = tp
-    data["tx"]          = tx
-    data["tm"]          = tm
-    data["esup"]        = esup
-    data["xm0"]         = xm0
-    data["wtflow0"]      = wtflow0
+    datac["kapital"]     = kapital
+    datac["labor"]       = labor
+    datac["ffact"]       = ffact
+    datac["nhrshare"]    = nhrshare
+    datac["nhrsigma"]    = nhrsigma
+    datac["g0"]          = g0
+    datac["rgdp0"]       = rgdp0
+    datac["aeei"]        = aeei
+    datac["sco2coef"]    = sco2coef
+    datac["cr"]          = cr
+    datac["xa0"]         = xa0
+    datac["purtrn"]      = purtrn
+    datac["tbo"]         = tbo
+    datac["tfo"]         = tfo
+    datac["toi"]         = toi
+    datac["tottrn"]      = tottrn
+    datac["tse"]         = tse
+    datac["own"]         = own
+    datac["hhwedge"]     = hhwedge
+    datac["xh"]          = xh
+    datac["ence1"]       = ence1
+    datac["euse0"]       = euse0
+    datac["fuel_in"]     = fuel_in
+    datac["ejod"]        = ejod
+    datac["ejuse0"]      = ejuse0
+    datac["ejuse_over_euse"] = ejuse_over_euse
+    datac["ejuse"]       = ejuse
+    datac["a0"]          = a0
+    datac["dispgen0"]    = dispgen0
+    datac["efout0"]      = efout0
+    datac["td_"]         = td_
+    datac["ffend0"]      = ffend0
+    datac["ffgprod0"]    = ffgprod0
+    datac["govdem0"]     = govdem0
+    datac["govoil0"]     = govoil0
+    datac["homm0"]       = homm0
+    datac["homx0"]       = homx0
+    datac["vhomx0"]      = vhomx0
+    datac["homt0"]       = homt0
+    datac["tmhom"]       = tmhom
+    datac["vhomm0"]      = vhomm0
+    datac["homadj"]      = homadj
+    datac["trnadj"]      = trnadj
+    datac["pwdem0"]      = pwdem0
+    datac["invoil0"]     = invoil0
+    datac["trnvst0"]     = trnvst0
+    datac["ytout0"]      = ytout0
+    datac["d0"]          = d0
+    datac["xp"]          = xp
+    datac["xp_phom"]     = xp_phom
+    datac["xp_pdb"]      = xp_pdb
+    datac["td"]          = td
+    datac["xp_"]         = xp_
+    datac["inv0"]        = inv0
+    datac["invdem0"]     = invdem0
+    datac["mvtwr"]       = mvtwr
+    datac["xaroilc"]     = xaroilc
+    datac["xaroila"]     = xaroila
+    datac["pac0"]        = pac0
+    datac["pwdem0"]      = pwdem0
+    datac["sco20"]       = sco20
+    datac["selas"]       = selas
+    datac["sele0"]       = sele0
+    datac["wele0"]       = wele0
+    datac["tele0"]       = tele0
+    datac["wst"]         = wst
+    datac["xat0"]        = xat0
+    datac["xd0"]         = xd0
+    datac["txhom"]       = txhom
+    datac["elecint"]     = elecint
+    datac["elecin"]      = elecin
+    datac["ti"]          = ti
+    datac["tf"]          = tf
+    datac["tg"]          = tg
+    datac["tp"]          = tp
+    datac["tx"]          = tx
+    datac["tm"]          = tm
+    datac["esup"]        = esup
+    datac["xm0"]         = xm0
+    datac["wtflow0"]      = wtflow0
 
-    return data
+    return datac
 
 end
 
