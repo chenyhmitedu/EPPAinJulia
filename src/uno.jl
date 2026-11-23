@@ -625,6 +625,25 @@ function Uno_data(data::Dict)
         end
     end
 
+    ftotco20 = Dict(
+        r => sum(sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) 
+        for r in REGIONS)
+
+    # cperv: the benchmark carbon intensity of fuel e in region r, in MtCO2 per 10 billion USD of that fuel
+    cperv = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
+    for r in REGIONS, e in SCO2_ENERGY
+        for g in EJUSE_SECTORS
+            val_g = pac0[(e, g, r)]
+            cperv[(e, g, r)] = val_g == 0 ? 0.0 : sco20[(e, g, r)] / val_g
+        end
+    end
+
+    # csale: the highest benchmark carbon intensity in r, MtCO2 per 10 billion USD. It is a scaling constant.
+    cscale = Dict(r => begin
+        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in EJUSE_SECTORS)
+        m > 0 ? m : 1.0
+    end for r in REGIONS)
+
     # Dictionaries exist but need to avoid missing keys
 
     ti = Dict(
@@ -751,7 +770,10 @@ function Uno_data(data::Dict)
     datac["tm"]          = tm
     datac["esup"]        = esup
     datac["xm0"]         = xm0
-    datac["wtflow0"]      = wtflow0
+    datac["wtflow0"]     = wtflow0
+    datac["ftotco20"]    = ftotco20
+    datac["cperv"]       = cperv
+    datac["cscale"]      = cscale
 
     return datac
 
