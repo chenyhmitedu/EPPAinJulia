@@ -1,4 +1,4 @@
-function EPPA_model(data::NamedTuple, setting::Int64)
+function Build(data::NamedTuple, setting::Int64)
 
     MGE  = MPSGEModel()
 

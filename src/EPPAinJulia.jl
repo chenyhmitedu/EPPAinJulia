@@ -11,12 +11,12 @@ module EPPAinJulia
     export Load_satellite_data
     
     include("uno.jl")
-    export uno_data
+    export Uno_data
 
     include("eppacore.jl")
     export EPPACore
 
-    include("eppa_model.jl")
-    export EPPA_model
+    include("build.jl")
+    export Build
 
 end # module EPPAinJulia

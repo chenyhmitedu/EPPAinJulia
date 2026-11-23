@@ -12,9 +12,9 @@ PATHSolver.c_api_License_SetString("1259252040&Courtesy&&&USR&GEN2035&5_1_2026&1
 
 Prepare_data() = Load_gtap_aggr() |> Load_gtap_disa |> Load_satellite_data
 data = Prepare_data()
-x = uno_data(data)
+x = Uno_data(data)
 B = (; (Symbol(k) => v for (k, v) in x)...)
 
-# EPPA_model is defined in MGE.jl 
-MGE = EPPA_model(B, -1)
+# Build is defined in build.jl 
+MGE = Build(B, -1)
 solve!(MGE, cumulative_iteration_limit = 0)

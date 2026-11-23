@@ -1,4 +1,4 @@
-# Similar to set declarations in GAMS. Keep the scope global.
+﻿# Similar to set declarations in GAMS. Keep the scope global.
 
 const REGIONS   = [:USA, :CAN, :MEX, :JPN, :ANZ, :EUR, :ROE, :RUS, :ASI, :CHN, :IND, :BRA, :AFR, :MES, :LAM, :REA, :KOR, :IDZ]
 const SECTORS   = [:crop, :live, :fors, :food, :coal, :oil, :roil, :gas, :elec, :eint, :othr, :serv, :tran, :dwe]
@@ -33,7 +33,7 @@ const ROR       = 0.1
 # Based on 1) parameters declared in eppacore.jl; 2) elecpower.gms
 
 
-function uno_data(data::Dict)
+function Uno_data(data::Dict)
     # Preserve raw inputs and isolate returned dictionaries from the caller.
     datac = deepcopy(data)
 
@@ -671,8 +671,6 @@ function uno_data(data::Dict)
         (r, rr, i) => get(data["wtflow0"], (r, rr, i), 0)
         for r in REGIONS, rr in REGIONS, i in SECTORS
     )
-
-
 
     datac["kapital"]     = kapital
     datac["labor"]       = labor
