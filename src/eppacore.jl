@@ -10,8 +10,7 @@ function EPPACore(MGE, B, simu::Integer = 0)
         l0[r=REGIONS], B.labor[r],                                                  (description = "Endowment: labor")
         ff0[i=SECTORS, r=REGIONS], B.ffff0[r, i],                                   (description = "Endowment: fixed factor: fossil fuels")
         fn0[i=SECTORS, r=REGIONS], B.ffnf0[r, i],                                   (description = "Endowment: fixed factor: non-fossil fuels")
-        ffe[i_=TECH_NHR, r=REGIONS], B.ffact[(i_, r)],                              (description = "Endowment: fixed factor for nele, hele and rele")
-        sav[r=REGIONS], B.savf0[r],                                                 (description = "Endowment: negative base-year trade balance")
+        ffe[i_=TECH_NHR, r=REGIONS], B.ffact[i_, r],                                (description = "Endowment: fixed factor for nele, hele and rele")
         grg[r=REGIONS], B.g0[r],                                                    (description = "Base-year government expenditure")
         gdp0[r=REGIONS], B.rgdp0[r],                                                (description = "Base-year GDP")
         gprod0[r=REGIONS], 1.0,                                                     (description = "Calibrated productivity target")
@@ -28,6 +27,8 @@ function EPPACore(MGE, B, simu::Integer = 0)
         tm[i=SECTORS, s=REGIONS, d=REGIONS], B.tm[(i, s, d)],                       (description = "Import tariff, from s to d")
         txhom[r=REGIONS], B.txhom[r],                                               (description = "Export tax on the homogeneous good")
         tmhom[r=REGIONS], B.tmhom[r],                                               (description = "Import tariff on the homogeneous good")
+        w0[r=REGIONS], B.pwdem0[r],                                                 (description = "Base-year welfare level")
+        bop[r=REGIONS], -B.savf0[r],                                                (description = "Balance of payment")
     end)            
 
     @commodities(MGE, begin         
@@ -363,13 +364,13 @@ function EPPACore(MGE, B, simu::Integer = 0)
 
     for r in REGIONS
         @demand(MGE, RA[r], begin
-            @final_demand(PW[r],       B.pwdem0[r])
+            @final_demand(PW[r],       w0[r])
             @endowment(PK[r],          k0[r] * GPROD[r])
             @endowment(PL[r],          l0[r] * GPROD[r])
             [@endowment(PF[i, r],      ff0[i, r] + GPROD[r] * fn0[i, r]) for i in SECTORS]...
-            [@endowment(PF_[i_, r],    B.ffact[(i_, r)]) for i_ in TECH_NHR]...
-            @endowment(PU[:USA],       B.savf0[r])
-            @endowment(PG[r],          -B.g0[r])
+            [@endowment(PF_[i_, r],    ffe[i_, r]) for i_ in TECH_NHR]...
+            @endowment(PU[:USA],       -bop[r])
+            @endowment(PG[r],          -grg[r])
             @endowment(PHOM[r],        B.homadj[r])
             @endowment(PT,             B.trnadj[r])
         end)
