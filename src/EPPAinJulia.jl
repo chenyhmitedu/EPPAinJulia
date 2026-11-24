@@ -19,4 +19,7 @@ module EPPAinJulia
     include("build.jl")
     export Build
 
+    include("recursive.jl")
+    export Recursive
+
 end # module EPPAinJulia

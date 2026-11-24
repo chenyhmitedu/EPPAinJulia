@@ -18,3 +18,16 @@ B = (; (Symbol(k) => v for (k, v) in x)...)
 # Build is defined in build.jl 
 MGE = Build(B, -1)
 solve!(MGE, cumulative_iteration_limit = 0)
+
+if length(ARGS) == 0
+    filename = "refcalib.jl"
+    #filename = "ref.jl"
+    #filename = "cpqs.jl"
+else
+    filename = ARGS[1]
+end
+
+case = joinpath(@__DIR__, "active/", filename)
+include(case)
+
+results = Recursive(B, 0)

@@ -8,7 +8,8 @@ function EPPACore(MGE, B, simu::Integer = 0)
     @parameters(MGE, begin
         k0[r=REGIONS], B.kapital[r],                                                (description = "Endowment: capital")
         l0[r=REGIONS], B.labor[r],                                                  (description = "Endowment: labor")
-        ff0[i=SECTORS, r=REGIONS], B.ffact[(i, r)],                                 (description = "Endowment: fixed factor and land in agri")
+        ff0[i=SECTORS, r=REGIONS], B.ffff0[r, i],                                   (description = "Endowment: fixed factor: fossil fuels")
+        fn0[i=SECTORS, r=REGIONS], B.ffnf0[r, i],                                   (description = "Endowment: fixed factor: non-fossil fuels")
         ffe[i_=TECH_NHR, r=REGIONS], B.ffact[(i_, r)],                              (description = "Endowment: fixed factor for nele, hele and rele")
         sav[r=REGIONS], B.savf0[r],                                                 (description = "Endowment: negative base-year trade balance")
         grg[r=REGIONS], B.g0[r],                                                    (description = "Base-year government expenditure")
@@ -363,9 +364,9 @@ function EPPACore(MGE, B, simu::Integer = 0)
     for r in REGIONS
         @demand(MGE, RA[r], begin
             @final_demand(PW[r],       B.pwdem0[r])
-            @endowment(PK[r],          B.kapital[r] * GPROD[r])
-            @endowment(PL[r],          B.labor[r] * GPROD[r])
-            [@endowment(PF[i, r],      B.ffend0[(r, i)] + GPROD[r] * B.ffgprod0[(r, i)]) for i in SECTORS]...
+            @endowment(PK[r],          k0[r] * GPROD[r])
+            @endowment(PL[r],          l0[r] * GPROD[r])
+            [@endowment(PF[i, r],      ff0[i, r] + GPROD[r] * fn0[i, r]) for i in SECTORS]...
             [@endowment(PF_[i_, r],    B.ffact[(i_, r)]) for i_ in TECH_NHR]...
             @endowment(PU[:USA],       B.savf0[r])
             @endowment(PG[r],          -B.g0[r])

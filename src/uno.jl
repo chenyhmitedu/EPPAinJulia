@@ -375,7 +375,7 @@ function Uno_data(data::Dict)
         for r in REGIONS, i in TECH
     )
 
-    ffend0 = Dict(
+    ffff0 = Dict(
         (r, i) => begin
             val = if (i in FF)
                 ffact[i, r]
@@ -386,7 +386,7 @@ function Uno_data(data::Dict)
         for r in REGIONS, i in SECTORS
     )
 
-    ffgprod0 = Dict(
+    ffnf0 = Dict(
         (r, i) => begin
             val = if (i in FF)
                 0.0 
@@ -722,8 +722,8 @@ function Uno_data(data::Dict)
     datac["dispgen0"]    = dispgen0
     datac["efout0"]      = efout0
     datac["td_"]         = td_
-    datac["ffend0"]      = ffend0
-    datac["ffgprod0"]    = ffgprod0
+    datac["ffff0"]       = ffff0
+    datac["ffnf0"]       = ffnf0
     datac["govdem0"]     = govdem0
     datac["govoil0"]     = govoil0
     datac["homm0"]       = homm0
