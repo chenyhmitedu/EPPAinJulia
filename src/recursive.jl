@@ -51,26 +51,6 @@ end
 # Capital, government, and the trade balance are not advanced: AI_01's demand
 # block keeps those endowments at the benchmark constants, and this core would
 # change the MCP if k0, l0, grg, or bop moved.
-function next_state(MGE, B, year, next)
-    years = B.year
-    regular = length(years) >= 3 ? years[3] - years[2] : years[2] - years[1]
-    span(y) = (j = findfirst(==(y), years); j < length(years) ? years[j + 1] - years[j] : regular)
-    out = Dict{Symbol,NamedTuple}()
-    for r in REGIONS
-        pop0 = B.popa_eppa[(year, r)]
-        pr = pop0 == 0 ? 1.0 : B.popa_eppa[(next, r)] / pop0
-        grow(y) = (1 + B.argdpgrrate[(y, r)])^span(y)
-        L = _level(MGE[:l0][r])
-        G = _level(MGE[:gdp0][r])
-        out[r] = (
-            L = L,
-            G = G,
-            Ln = max(L * pr, 1e-8),
-            Gn = G * grow(year),
-        )
-    end
-    return out
-end
 
 function solve_mcp!(MGE; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 3)
     jm = jump_model(MGE)
@@ -115,7 +95,25 @@ function solve_mcp!(MGE; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 
 end
 
 function advance!(MGE, B, year, next, simu)
-    old = next_state(MGE, B, year, next)
+
+    years = B.year
+    regular = length(years) >= 3 ? years[3] - years[2] : years[2] - years[1]
+    span(y) = (j = findfirst(==(y), years); j < length(years) ? years[j + 1] - years[j] : regular)
+    out = Dict{Symbol,NamedTuple}()
+    for r in REGIONS
+        pop0 = B.popa_eppa[(year, r)]
+        pr = pop0 == 0 ? 1.0 : B.popa_eppa[(next, r)] / pop0
+        grow(y) = (1 + B.argdpgrrate[(y, r)])^span(y)
+        L = _level(MGE[:l0][r])
+        G = _level(MGE[:gdp0][r])
+        out[r] = (
+            L = L,
+            G = G,
+            Ln = max(L * pr, 1e-8),
+            Gn = G * grow(year),
+        )
+    end
+
     jm = jump_model(MGE)
     base = Dict{String,Float64}()
     for v in all_variables(jm)
@@ -155,7 +153,7 @@ function advance!(MGE, B, year, next, simu)
     prox = simu == 1 && isdefined(Main, :policy) && Main.policy == :cpq ? 0.0 : 1e-4
 
     for r in REGIONS
-        set_value!(MGE[:gdp0][r], old[r].Gn)
+        set_value!(MGE[:gdp0][r], out[r].Gn)
     end
 
     stt, res = solve_mcp!(MGE; proximal = prox, restarts = 3, iters = 30_000)
@@ -186,7 +184,7 @@ function advance!(MGE, B, year, next, simu)
         copy_starts!(base)
         
         for r in REGIONS
-            set_value!(MGE[:gdp0][r], old[r].Gn)
+            set_value!(MGE[:gdp0][r], out[r].Gn)
         end
 
         for v in all_variables(jm)
@@ -207,7 +205,7 @@ function advance!(MGE, B, year, next, simu)
             copy_starts!(origin)
             
             for r in REGIONS
-                set_value!(MGE[:gdp0][r], old[r].Gn)
+                set_value!(MGE[:gdp0][r], out[r].Gn)
             end
 
             stt_last, res_last = solve_mcp!(MGE; proximal = prox, restarts = 1, iters = 10_000)
@@ -223,7 +221,7 @@ function advance!(MGE, B, year, next, simu)
         if !failed
             
             for r in REGIONS
-                set_value!(MGE[:gdp0][r], old[r].Gn)
+                set_value!(MGE[:gdp0][r], out[r].Gn)
             end
 
             stt_last = stt_last in (JuMP.MOI.LOCALLY_SOLVED, JuMP.MOI.ALMOST_LOCALLY_SOLVED, JuMP.MOI.OPTIMAL) ? stt_last : JuMP.MOI.ALMOST_LOCALLY_SOLVED
@@ -233,7 +231,7 @@ function advance!(MGE, B, year, next, simu)
     copy_starts!(origin)
     
     for r in REGIONS
-        set_value!(MGE[:gdp0][r], old[r].Gn)
+        set_value!(MGE[:gdp0][r], out[r].Gn)
     end
 
     return stt_last, res_last
