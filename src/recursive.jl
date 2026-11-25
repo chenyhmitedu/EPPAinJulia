@@ -125,38 +125,6 @@ function solve_mcp!(MGE; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 
     return termination_status(jm), res
 end
 
-# Quantity starts follow the GDP step. Prices, GPROD, and RGDP are set afterwards.
-function shift_start!(MGE, old, simu)
-    jm = jump_model(MGE)
-    regs = Set(REGIONS)
-    world = sum(old[r].G > 0 ? old[r].Gn / old[r].G : 1.0 for r in REGIONS) / length(REGIONS)
-    for v in all_variables(jm)
-        JuMP.is_fixed(v) && continue
-        n = JuMP.name(v)
-        (startswith(n, "P") || startswith(n, "RA") || startswith(n, "GPROD") || startswith(n, "RGDP") || startswith(n, "CT") || startswith(n, "CP")) && continue
-        s = start_value(v)
-        (s === nothing || !isfinite(s) || s == 0) && continue
-        m = match(r"\[([^\]]+)\]$", n)
-        reg = m === nothing ? nothing : Symbol(strip(split(m.captures[1], ",")[end]))
-        fac = reg !== nothing && reg in regs && old[reg].G > 0 ? old[reg].Gn / old[reg].G : world
-        set_start_value(v, s * fac)
-    end
-    for r in REGIONS
-        o = old[r]
-        grow = o.G > 0 ? o.Gn / o.G : 1.0
-        lrat = o.L > 0 ? o.Ln / o.L : 1.0
-        g0 = start_value(MGE[:GPROD][r])
-        g0 = g0 === nothing ? 1.0 : g0
-        if simu == 0
-            set_start_value(MGE[:GPROD][r], max(g0 * grow / lrat, 1e-6))
-        else
-            JuMP.set_start_value(get_variable(MGE[:GPROD][r]), _level(MGE[:gprod0][r]))
-        end
-        set_start_value(MGE[:RGDP][r], o.Gn)
-    end
-    return nothing
-end
-
 function advance!(MGE, B, year, next, simu)
     old = next_state(MGE, B, year, next)
     jm = jump_model(MGE)
@@ -203,7 +171,6 @@ function advance!(MGE, B, year, next, simu)
         println("  warm ", stt, " res ", res, " gap ", g)
         flush(stdout)
         copy_starts!(base)
-        shift_start!(MGE, old, simu)
         stt, res = solve_mcp!(MGE; proximal = prox, restarts = 2, iters = 20_000)
         g = gdp_gap()
         println("  scaled ", stt, " res ", res, " gap ", g)
