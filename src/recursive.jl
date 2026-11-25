@@ -72,17 +72,6 @@ function next_state(MGE, B, year, next)
     return out
 end
 
-function plant!(MGE, old, w)
-    # k0, l0, grg, and bop stay at the benchmark. AI_01's demand block endows
-    # those with B.kapital, B.labor, B.g0, and B.sav0, not with the parameters.
-    # This core would solve a different model if those four moved. gdp0 is updated.
-    for r in REGIONS
-        o = old[r]
-        set_value!(MGE[:gdp0][r], (1 - w) * o.G + w * o.Gn)
-    end
-    return nothing
-end
-
 function solve_mcp!(MGE; tol = 1e-5, iters = 20_000, proximal = 0.0, restarts = 3)
     jm = jump_model(MGE)
     if !haskey(JuMP.object_dictionary(jm), :z_p)
@@ -164,7 +153,11 @@ function advance!(MGE, B, year, next, simu)
     end
     usable(stt, res, g) = stt == JuMP.MOI.LOCALLY_SOLVED || (isfinite(res) && res <= 1e-4 && g <= 1e-4) || (isfinite(res) && isfinite(g) && g <= 1e-5 && res <= 1.0)
     prox = simu == 1 && isdefined(Main, :policy) && Main.policy == :cpq ? 0.0 : 1e-4
-    plant!(MGE, old, 1.0)
+
+    for r in REGIONS
+        set_value!(MGE[:gdp0][r], old[r].Gn)
+    end
+
     stt, res = solve_mcp!(MGE; proximal = prox, restarts = 3, iters = 30_000)
     g = gdp_gap()
     if !usable(stt, res, g)
@@ -191,7 +184,11 @@ function advance!(MGE, B, year, next, simu)
         println("  damp ", w)
         flush(stdout)
         copy_starts!(base)
-        plant!(MGE, old, w)
+        
+        for r in REGIONS
+            set_value!(MGE[:gdp0][r], old[r].Gn)
+        end
+
         for v in all_variables(jm)
             JuMP.is_fixed(v) && continue
             n = JuMP.name(v)
@@ -208,7 +205,11 @@ function advance!(MGE, B, year, next, simu)
                 break
             end
             copy_starts!(origin)
-            plant!(MGE, old, a)
+            
+            for r in REGIONS
+                set_value!(MGE[:gdp0][r], old[r].Gn)
+            end
+
             stt_last, res_last = solve_mcp!(MGE; proximal = prox, restarts = 1, iters = 10_000)
             g = gdp_gap()
             if !usable(stt_last, res_last, g)
@@ -220,13 +221,21 @@ function advance!(MGE, B, year, next, simu)
             warm!()
         end
         if !failed
-            plant!(MGE, old, 1.0)
+            
+            for r in REGIONS
+                set_value!(MGE[:gdp0][r], old[r].Gn)
+            end
+
             stt_last = stt_last in (JuMP.MOI.LOCALLY_SOLVED, JuMP.MOI.ALMOST_LOCALLY_SOLVED, JuMP.MOI.OPTIMAL) ? stt_last : JuMP.MOI.ALMOST_LOCALLY_SOLVED
             return stt_last, res_last
         end
     end
     copy_starts!(origin)
-    plant!(MGE, old, 1.0)
+    
+    for r in REGIONS
+        set_value!(MGE[:gdp0][r], old[r].Gn)
+    end
+
     return stt_last, res_last
 end
 
