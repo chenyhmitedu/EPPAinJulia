@@ -5,6 +5,8 @@ module EPPAinJulia
     using MPSGE
     using JuMP
 
+    include("smooth.jl")
+
     include("load_data.jl")
     export Load_gtap_aggr
     export Load_gtap_disa

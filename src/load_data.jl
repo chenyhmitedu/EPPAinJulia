@@ -58,3 +58,28 @@ function Load_satellite_data(data::Dict)
     return data
 
 end
+
+"""
+    gams_table(text) -> Dict{Tuple{Symbol,Int},Float64}
+
+Read a GAMS-style table. The first line is the column headers (years). Each
+later line is a row label and one number per column. Blank lines and lines
+starting with `*` are ignored. Region labels keep the case written in the table.
+"""
+function gams_table(text::AbstractString)
+    lines = [strip(line) for line in split(text, '\n') if !isempty(strip(line)) && !startswith(lstrip(line), '*')]
+    isempty(lines) && error("gams table is empty")
+    years = [parse(Int, h) for h in split(lines[1])]
+    out = Dict{Tuple{Symbol,Int},Float64}()
+    for line in lines[2:end]
+        parts = split(line)
+        length(parts) == length(years) + 1 || error("row $(parts[1]) has $(length(parts) - 1) values, expected $(length(years))")
+        r = Symbol(parts[1])
+        for (t, v) in zip(years, parts[2:end])
+            out[(r, t)] = parse(Float64, v)
+        end
+    end
+    return out
+end
+
+export gams_table

@@ -150,14 +150,66 @@ function advance!(MGE, B, year, next, simu)
         return g
     end
     usable(stt, res, g) = stt == JuMP.MOI.LOCALLY_SOLVED || (isfinite(res) && res <= 1e-4 && g <= 1e-4) || (isfinite(res) && isfinite(g) && g <= 1e-5 && res <= 1.0)
-    prox = simu == 1 && isdefined(Main, :policy) && Main.policy == :cpq ? 0.0 : 1e-4
-
+    cpq = simu == 1 && isdefined(Main, :policy) && Main.policy == :cpq
+    # The carbon cap is not the GDP target, so a large GDP gap is expected.
+    cap_ok(stt, res) = stt in (JuMP.MOI.LOCALLY_SOLVED, JuMP.MOI.ALMOST_LOCALLY_SOLVED, JuMP.MOI.OPTIMAL) || (isfinite(res) && res <= 1e-4)
+    prox = cpq ? 0.0 : 1e-4
+    # Restarts walk off the carbon-cap solution once the quota is tight.
+    nrestart = cpq ? 0 : 3
     for r in REGIONS
         set_value!(MGE[:gdp0][r], out[r].Gn)
     end
-
-    stt, res = solve_mcp!(MGE; proximal = prox, restarts = 3, iters = 30_000)
+    stt, res = solve_mcp!(MGE; proximal = prox, restarts = nrestart, iters = 30_000)
     g = gdp_gap()
+    if cpq && !cap_ok(stt, res)
+        # PATH stops while the residual is still falling. Continue from that point.
+        println("  warm ", stt, " res ", res, " gap ", g)
+        flush(stdout)
+        for _ in 1:6
+            cap_ok(stt, res) && break
+            warm!()
+            stt, res = solve_mcp!(MGE; proximal = 0.0, restarts = 0, iters = 20_000)
+            g = gdp_gap()
+            println("  continue ", stt, " res ", res, " gap ", g)
+            flush(stdout)
+        end
+    end
+    if cpq && !cap_ok(stt, res)
+        # Tighten the quota from the previous period instead of jumping.
+        rer = isdefined(Main, :rer) ? Main.rer : (r, t) -> 1.0
+        bau = JLD2.load(normpath(joinpath(@__DIR__, "..", "data", "bau.jld2")), "bau")
+        rate(y, r) = float(rer(Symbol(lowercase(string(r))), y))
+        oldc = Dict(r => bau[(:ftotco20, year)][r] * rate(year, r) for r in REGIONS)
+        newc = Dict(r => bau[(:ftotco20, next)][r] * rate(next, r) for r in REGIONS)
+        copy_starts!(base)
+        for w in (0.2, 0.4, 0.6, 0.8, 1.0)
+            for r in REGIONS
+                set_value!(MGE[:co2cap][r], (1 - w) * oldc[r] + w * newc[r])
+            end
+            println("  cap ", w)
+            flush(stdout)
+            stt, res = solve_mcp!(MGE; proximal = 0.0, restarts = 0, iters = 20_000)
+            for _ in 1:5
+                cap_ok(stt, res) && break
+                warm!()
+                stt, res = solve_mcp!(MGE; proximal = 0.0, restarts = 0, iters = 20_000)
+            end
+            g = gdp_gap()
+            println("    ", stt, " res ", res, " gap ", g)
+            flush(stdout)
+            cap_ok(stt, res) || break
+            warm!()
+        end
+        for r in REGIONS
+            set_value!(MGE[:co2cap][r], newc[r])
+        end
+        cap_ok(stt, res) && warm!()
+        return stt, res
+    end
+    if cpq && cap_ok(stt, res)
+        warm!()
+        return stt, res
+    end
     if !usable(stt, res, g)
         println("  warm ", stt, " res ", res, " gap ", g)
         flush(stdout)
@@ -347,6 +399,8 @@ function Recursive(B::NamedTuple, setting::Int64)
                 gprod = _level(MGE[:GPROD][r]),
                 rgdp = _level(MGE[:RGDP][r]),
                 target = _level(MGE[:gdp0][r]),
+                ftotco2 = _level(MGE[:FTOTCO2][r]),
+                cp = _level(MGE[:CP][r]),
                 status = string(stt),
             ))
             ftot[(year, r)] = _level(MGE[:FTOTCO2][r])

@@ -16,6 +16,7 @@ const TECH_NHR  = [:nele, :hele, :rele]
 const TECH_N    = [:sele, :wele]
 const TECH_D    = [:cele, :gele, :oele, :hele, :nele, :rele]
 const EJUSE_SECTORS = [filter(!=(:elec), SECTORS)..., TECH..., :households, :htrn]
+const AC_SECTORS    = [:industry, :htrn, :households]
 const SCO2_ENERGY   = [:coal, :gas, :roil]
 const FB        = SCO2_ENERGY ∪ [:bio]
 const SCO2_SECTORS  = [filter(!=(:elec), SECTORS)..., TECH..., :households, :htrn]
@@ -24,6 +25,11 @@ const NOT_AENOE = [:food, :othr, :serv, :tran, :dwe]
 const LKR       = [:lab, :cap, :res]
 const LK        = [:lab, :cap]
 const PRIMARY   = [:lab, :cap, :lnd, :res]
+
+# Same user groups as the 20261107 carbon pass-through: one activity for
+# industry (sectors and power technologies), one for household transport, and
+# one for other household energy.
+ac_group(g) = g == :households ? :households : g == :htrn ? :htrn : :industry
 
 const HTRNS     = 0.3753
 const PROPFRAC  = 0.2
@@ -329,16 +335,17 @@ function Uno_data(data::Dict)
         for r in REGIONS, e in ENERGY, g in EJUSE_SECTORS
     )
 
+    # Scale coal, gas, and refined oil onto the IEA total. Crude oil and
+    # electricity stay at the GTAP quantity (ejadj = 1), as in the reference model.
+    # Refined oil uses its own GTAP total in the denominator and IEA oil as the target.
     ejadj = Dict(
         (e, r) => begin
-            val = if (e ==:roil)
-                sum(ejuse_all0[:oil, g, r] for g in EJUSE_SECTORS) == 0 ? 
-                0.0 : data["ejuse_iea"][:oil, r] / sum(ejuse_all0[:oil, g, r] for g in EJUSE_SECTORS)
-            elseif (e == :elec)
-                1.0
+            if e in (:coal, :gas, :roil)
+                total = sum(ejuse_all0[e, g, r] for g in EJUSE_SECTORS)
+                iea = e == :roil ? data["ejuse_iea"][:oil, r] : data["ejuse_iea"][e, r]
+                total == 0 ? 0.0 : iea / total
             else
-                sum(ejuse_all0[e, g, r] for g in EJUSE_SECTORS) == 0 ? 
-                0.0 : data["ejuse_iea"][e, r] / sum(ejuse_all0[e, g, r] for g in EJUSE_SECTORS)
+                1.0
             end
         end
         for r in REGIONS, e in ENERGY
@@ -629,18 +636,23 @@ function Uno_data(data::Dict)
         r => sum(sco20[(e, u, r)] for e in SCO2_ENERGY for u in SCO2_SECTORS) 
         for r in REGIONS)
 
-    # cperv: the benchmark carbon intensity of fuel e in region r, in MtCO2 per 10 billion USD of that fuel
+    # cperv: benchmark carbon intensity of fuel e in region r, MtCO2 per dollar of
+    # that fuel. One rate per fuel, shared by every user group, so the carbon
+    # tax does not depend on which pass-through activity supplies PAC.
     cperv = Dict{Tuple{Symbol,Symbol,Symbol},Float64}()
     for r in REGIONS, e in SCO2_ENERGY
-        for g in EJUSE_SECTORS
-            val_g = pac0[(e, g, r)]
-            cperv[(e, g, r)] = val_g == 0 ? 0.0 : sco20[(e, g, r)] / val_g
+        emis = sum(get(sco20, (e, u, r), 0.0) for u in SCO2_SECTORS)
+        val = sum(get(pac0, (e, u, r), 0.0) for u in EJUSE_SECTORS)
+        rate = val == 0 ? 0.0 : emis / val
+        for g in AC_SECTORS
+            cperv[(e, g, r)] = rate
         end
     end
 
-    # csale: the highest benchmark carbon intensity in r, MtCO2 per 10 billion USD. It is a scaling constant.
+    # cscale: the highest benchmark carbon intensity in r. CP is the tax rate on
+    # that fuel; other fuels are taxed in proportion to cperv / cscale.
     cscale = Dict(r => begin
-        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in EJUSE_SECTORS)
+        m = maximum(cperv[(e, g, r)] for e in SCO2_ENERGY, g in AC_SECTORS)
         m > 0 ? m : 1.0
     end for r in REGIONS)
 

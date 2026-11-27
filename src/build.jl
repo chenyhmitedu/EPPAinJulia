@@ -1,5 +1,6 @@
 function Build(data::NamedTuple, setting::Int64)
 
+    apply_smooth!()
     MGE  = MPSGEModel()
 
     EPPACore(MGE, data, setting)

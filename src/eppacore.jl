@@ -59,7 +59,7 @@ function EPPACore(MGE, B, simu::Integer = 0)
     @sectors(MGE, begin         
         D[i=SECTORS, r=REGIONS],                                                    (description = "Activity level for domestic production")
         DE[i=TECH ∪ [:elec], r=REGIONS],                                            (description = "Activity level for power subsector and some aggregation")
-        AC[e=ENERGY, g=EJUSE_SECTORS, r=REGIONS],                                   (description = "Activity level for combusted energy transformation by user")
+        AC[e=ENERGY, g=AC_SECTORS, r=REGIONS],                                   (description = "Activity level for combusted energy transformation by user group")
         GOVT[r=REGIONS],                                                            (description = "Activity level for aggregated government consumption")                                      
         INV[r=REGIONS],                                                             (description = "Activity level for investment")                                      
         YT,                                                                         (description = "Activity level for international transport")                              
@@ -82,26 +82,27 @@ function EPPACore(MGE, B, simu::Integer = 0)
         SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=REGIONS],                             (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
         FTOTCO2[r=REGIONS],                                                         (lower_bound = 0, start = B.ftotco20[r], description = "Total combusted CO2 by region in MtCO2")
         CP[r=REGIONS],                                                              (lower_bound = 0, start = 0, description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r")
-        CT[e=SCO2_ENERGY, g=EJUSE_SECTORS, r=REGIONS],                              (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user and region")
+        CT[e=SCO2_ENERGY, g=AC_SECTORS, r=REGIONS],                              (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user group and region")
     end)            
 
     @consumers(MGE, begin           
         RA[r=REGIONS],                                                              (description = "Representative agent")
     end)            
 
-    for r in REGIONS, g in EJUSE_SECTORS
+    for r in REGIONS, g in AC_SECTORS
+        q(e) = sum(get(B.pac0, (e, u, r), 0.0) for u in EJUSE_SECTORS if ac_group(u) == g)
         @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
-            @output(PAC[:oil, r],      B.pac0[(:oil, g, r)],    t)
-            @input(PHOM[r],            B.pac0[(:oil, g, r)],    s)
+            @output(PAC[:oil, r],      q(:oil),    t)
+            @input(PHOM[r],            q(:oil),    s)
         end)
         @production(MGE, AC[:elec, g, r], [t=0, s=0], begin
-            @output(PAC[:elec, r],     B.pac0[(:elec, g, r)],   t)
-            @input(PA[:elec, r],       B.pac0[(:elec, g, r)],   s)
+            @output(PAC[:elec, r],     q(:elec),   t)
+            @input(PA[:elec, r],       q(:elec),   s)
         end)
         for e in SCO2_ENERGY
             @production(MGE, AC[e, g, r], [t=0, s=0], begin
-                @output(PAC[e, r],     B.pac0[(e, g, r)],       t)
-                @input(PA[e, r],       B.pac0[(e, g, r)],       s, taxes=[Tax(RA[r], CT[e, g, r])])
+                @output(PAC[e, r],     q(e),       t)
+                @input(PA[e, r],       q(e),       s, taxes=[Tax(RA[r], CT[e, g, r])])
             end)
         end
     end
@@ -377,7 +378,7 @@ function EPPACore(MGE, B, simu::Integer = 0)
     end
 
     for r in REGIONS, g in EJUSE_SECTORS, e in ENERGY
-        expr = B.ejuse_over_euse[(e, g, r)] * B.euse0[(e, g, r)] * AC[e, g, r]
+        expr = B.ejuse_over_euse[(e, g, r)] * B.euse0[(e, g, r)] * AC[e, ac_group(g), r]
         @aux_constraint(MGE, EE[e, g, r], EE[e, g, r] - expr)
     end
 
@@ -393,7 +394,7 @@ function EPPACore(MGE, B, simu::Integer = 0)
         @aux_constraint(MGE, CP[r], 
             (co2cap[r] - FTOTCO2[r]) / max(B.ftotco20[r], 1.0))
 
-        for e in SCO2_ENERGY, g in EJUSE_SECTORS
+        for e in SCO2_ENERGY, g in AC_SECTORS
             # the ratio B.cperv / B.cscale has no unit; CP is the tax rate on the most carbon-intensive fuel
             @aux_constraint(MGE, CT[e, g, r], 
                 CT[e, g, r] - CP[r] * (B.cperv[(e, g, r)] / B.cscale[r]))
