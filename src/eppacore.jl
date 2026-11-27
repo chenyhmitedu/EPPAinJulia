@@ -76,13 +76,13 @@ function EPPACore(MGE, B, simu::Integer = 0)
     end)            
 
     @auxiliaries(MGE, begin         
-        GPROD[r=REGIONS],                                                           (lower_bound = 0, start = 1, description = "Productivity index")
-        RGDP[r=REGIONS],                                                            (lower_bound = 0, start = B.rgdp0[r], description = "Real GDP")
-        EE[e=ENERGY, g=EJUSE_SECTORS, r=REGIONS],                                   (lower_bound = 0, start = B.ejuse[(e, g, r)], description = "Combusted energy use by energy, sector, and region in EJ")
-        SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=REGIONS],                             (lower_bound = 0, start = B.sco20[(e, g, r)], description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2")
-        FTOTCO2[r=REGIONS],                                                         (lower_bound = 0, start = B.ftotco20[r], description = "Total combusted CO2 by region in MtCO2")
-        CP[r=REGIONS],                                                              (lower_bound = 0, start = 0, description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r")
-        CT[e=SCO2_ENERGY, g=AC_SECTORS, r=REGIONS],                              (start = 0, description = "Carbon tax rate on coal, gas, and refined oil by user group and region")
+        GPROD[r=REGIONS],                                                           (description = "Productivity index", lower_bound = 0, start = 1)
+        RGDP[r=REGIONS],                                                            (description = "Real GDP", lower_bound = 0, start = B.rgdp0[r])
+        EE[e=ENERGY, g=EJUSE_SECTORS, r=REGIONS],                                   (description = "Combusted energy use by energy, sector, and region in EJ", lower_bound = 0, start = B.ejuse[(e, g, r)])
+        SCO2[e=SCO2_ENERGY, g=SCO2_SECTORS, r=REGIONS],                             (description = "Sectoral combusted CO2 emissions by fossil energy, user, and region in MtCO2", lower_bound = 0, start = B.sco20[(e, g, r)])
+        FTOTCO2[r=REGIONS],                                                         (description = "Total combusted CO2 by region in MtCO2", lower_bound = 0, start = B.ftotco20[r])
+        CP[r=REGIONS],                                                              (description = "Ad valorem (carbon) tax rate on the most carbon-intensive fuel in r", lower_bound = 0, start = 0)
+        CT[e=SCO2_ENERGY, g=AC_SECTORS, r=REGIONS],                                 (description = "Carbon tax rate on coal, gas, and refined oil by user group and region", start = 0)
     end)            
 
     @consumers(MGE, begin           
@@ -90,7 +90,6 @@ function EPPACore(MGE, B, simu::Integer = 0)
     end)            
 
         for r in REGIONS, g in AC_SECTORS
-
             @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
                 @output(PAC[:oil, r],      B.pac0[:oil, g, r],    t)
                 @input(PHOM[r],            B.pac0[:oil, g, r],    s)
@@ -105,7 +104,6 @@ function EPPACore(MGE, B, simu::Integer = 0)
                     @input(PA[e, r],       B.pac0[e, g, r],       s, taxes=[Tax(RA[r], CT[e, g, r])])
                 end)
             end
-        
         end
 
     for i in NOT_AENOE, r in REGIONS
