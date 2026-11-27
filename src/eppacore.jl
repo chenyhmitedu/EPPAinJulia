@@ -89,9 +89,7 @@ function EPPACore(MGE, B, simu::Integer = 0)
         RA[r=REGIONS],                                                              (description = "Representative agent")
     end)            
 
-
-
-        for r in REGIONS, g in [:households, :htrn]
+        for r in REGIONS, g in AC_SECTORS
 
             @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
                 @output(PAC[:oil, r],      B.pac0[:oil, g, r],    t)
@@ -108,25 +106,6 @@ function EPPACore(MGE, B, simu::Integer = 0)
                 end)
             end
         
-        end
-
-        for r in REGIONS, g in AC_SECTORS
-
-            q(e) = sum(get(B.pac0, (e, u, r), 0.0) for u in EJUSE_SECTORS if ac_group(u) == g)
-            @production(MGE, AC[:oil, g, r], [t=0, s=0], begin
-                @output(PAC[:oil, r],      q(:oil),    t)
-                @input(PHOM[r],            q(:oil),    s)
-            end)
-            @production(MGE, AC[:elec, g, r], [t=0, s=0], begin
-                @output(PAC[:elec, r],     q(:elec),   t)
-                @input(PA[:elec, r],       q(:elec),   s)
-            end)
-            for e in SCO2_ENERGY
-                @production(MGE, AC[e, g, r], [t=0, s=0], begin
-                    @output(PAC[e, r],     q(e),       t)
-                    @input(PA[e, r],       q(e),       s, taxes=[Tax(RA[r], CT[e, g, r])])
-                end)
-            end
         end
 
     for i in NOT_AENOE, r in REGIONS

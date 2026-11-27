@@ -562,13 +562,14 @@ function Uno_data(data::Dict)
     for r in REGIONS, e in ENERGY
         for g in SECTORS
             g == :elec && continue
-            pac0[(e, g, r)] = e == :roil ? xaroilc[r, g] : xa0[r, e, g]
+            pac0[e, g, r] = e == :roil ? xaroilc[r, g] : xa0[r, e, g]
         end
         for t in TECH
             pac0[e, t, r] = e == :roil ? elecin[t, :roil, r] * cr[:roil, :elec, r] : elecin[t, e, r]
         end
         pac0[e, :households, r] = e == :roil ? ence1[e, r] * cr[:roil, :final, r] : ence1[e, r]
         pac0[e, :htrn, r] = e == :roil ? tfo[r] * cr[:roil, :final, r] : 0.0
+        pac0[e, :industry, r] = sum(get(pac0, (e, u, r), 0.0) for u in EJUSE_SECTORS if ac_group(u) == :industry)
     end
 
     pwdem0 = Dict(
